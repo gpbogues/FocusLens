@@ -1,0 +1,40 @@
+.sidebar {
+  width: 250px;
+  height: 100vh;
+  background-color: #1a1a1a;
+  padding: 20px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.session-button {
+  padding: 15px 30px;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  max-width: 200px;
+  color: white;
+  margin-top: 20px;
+}
+
+.session-button.start {
+  background-color: #22c55e;
+}
+
+.session-button.start:hover {
+  background-color: #16a34a;
+}
+
+.session-button.stop {
+  background-color: #ef4444;
+}
+
+.session-button.stop:hover {
+  background-color: #dc2626;
+}
