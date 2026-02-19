@@ -1,0 +1,41 @@
+.right-sidebar {
+  width: 320px;
+  background-color: #0a0a0a;
+  border-left: 1px solid #404040;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 20px;
+}
+
+.webcam-container {
+  width: 100%;
+}
+
+.session-button {
+  padding: 15px 30px;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  color: white;
+}
+
+.session-button.start {
+  background-color: #22c55e;
+}
+
+.session-button.start:hover {
+  background-color: #16a34a;
+}
+
+.session-button.stop {
+  background-color: #ef4444;
+}
+
+.session-button.stop:hover {
+  background-color: #dc2626;
+}

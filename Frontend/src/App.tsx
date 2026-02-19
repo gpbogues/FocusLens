@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './App.css'
-import Sidebar from './components/Sidebar'
-import WebcamFeed from './components/WebcamFeed'
+import Layout from './components/Layout/Layout'
+import Home from './components/Home/Home'
+import Profile from './components/Profile/Profile'
+import Metrics from './components/Metrics/Metrics'
 
 function App() {
   const [isSessionActive, setIsSessionActive] = useState(false)
@@ -11,13 +14,23 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      <Sidebar
-        isSessionActive={isSessionActive}
-        onToggleSession={handleToggleSession}
-      />
-      <WebcamFeed isActive={isSessionActive} />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Layout
+              isSessionActive={isSessionActive}
+              onToggleSession={handleToggleSession}
+            />
+          }
+        >
+          <Route index element={<Home />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="metrics" element={<Metrics />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 
