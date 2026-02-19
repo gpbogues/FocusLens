@@ -1,0 +1,28 @@
+drop table SessionGraphics;
+drop table SessionTable;
+drop table UserData;
+
+CREATE TABLE UserData
+	(	UserID int auto_increment NOT NULL Primary KEY,
+		uEmail varchar(50) NOT NULL UNIQUE,
+		uName varchar(30) NOT NULL,
+		uPassword varchar(30) NOT NULL
+	);
+	
+CREATE TABLE SessionTable
+	(	SessionID int auto_increment NOT NULL Primary KEY,
+		UserID int NOT NULL,
+        SessionDate Date NOT NULL,
+        SessionLengthTotal int NOT NULL,
+        SessionAvgFocus int NOT NULL
+    );
+ALTER TABLE SessionTable ADD CONSTRAINT SessionTable_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID);
+
+CREATE TABLE SessionGraphics
+	(	SessionGraphicsID int auto_increment NOT NULL Primary KEY,
+		SessionID int NOT NULL,
+        placeHolder int NOT NULL
+	);
+ALTER TABLE SessionGraphics ADD CONSTRAINT SessionGraphics_SessionIDfk FOREIGN KEY (SessionID) REFERENCES SessionTable (SessionID);
+
+select * from UserData;

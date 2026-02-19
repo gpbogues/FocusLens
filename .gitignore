@@ -12,3 +12,6 @@ Dataset/
 
 # macOS
 .DS_Store
+
+# env file that stores database login info
+.env
