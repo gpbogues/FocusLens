@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './App.css'
+import Login from './components/Login/Login'
 import Layout from './components/Layout/Layout'
 import Home from './components/Home/Home'
 import Profile from './components/Profile/Profile'
@@ -28,6 +29,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="profile" element={<Profile />} />
           <Route path="metrics" element={<Metrics />} />
+          <Route path="login" element={<Login />} />
         </Route>
       </Routes>
     </BrowserRouter>
