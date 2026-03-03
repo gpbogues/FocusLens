@@ -18,8 +18,8 @@ function Login() {
     // it is frontend acessing backend api requests to database
     // if(isRegister) then takes three values and passes, else two
     const url = isRegister
-      ? "http://localhost:5000/register"
-      : "http://localhost:5000/login";
+      ? "http://100.27.212.225:5000/register"
+      : "http://100.27.212.225:5000/login";
 
     const body = isRegister
       ? { username, email, password }
