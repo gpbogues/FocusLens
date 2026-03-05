@@ -6,6 +6,7 @@ import Layout from './components/Layout/Layout'
 import Home from './components/Home/Home'
 import Profile from './components/Profile/Profile'
 import Metrics from './components/Metrics/Metrics'
+import { AuthProvider } from './context/AuthContext'
 
 function App() {
   const [isSessionActive, setIsSessionActive] = useState(false)
@@ -15,6 +16,7 @@ function App() {
   }
 
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Routes>
         <Route
@@ -33,6 +35,7 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
   )
 }
 

@@ -70,7 +70,7 @@ app.post("/login", async (req, res) => {
 
   // row exists if user exists hence (row.length > 0)
   if (rows.length > 0) {
-    res.json({ success: true });
+    res.json({ success: true, username: rows[0].uName, email: rows[0].uEmail });
   } else {
     res.json({ success: false });
   }

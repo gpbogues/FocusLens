@@ -26,3 +26,9 @@
   color: rgba(255, 255, 255, 0.87);
   margin: 0;
 }
+
+.account-email {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+}

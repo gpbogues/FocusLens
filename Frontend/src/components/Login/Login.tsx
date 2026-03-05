@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import "./Login.css";
 
 function Login() {
@@ -7,6 +9,8 @@ function Login() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   // Handle submit for both login and register
   const handleSubmit = async (
@@ -33,8 +37,19 @@ function Login() {
       });
 
       const data = await res.json();
-      //takes backend message if exist, such as errors like email dupe
-      alert(data.message);
+
+      if (!isRegister) {
+        // Login flow: save user to context and redirect home
+        if (data.success) {
+          login({ username: data.username, email: data.email });
+          navigate("/");
+        } else {
+          alert("Invalid email or password");
+        }
+      } else {
+        //takes backend message if exist, such as errors like email dupe
+        alert(data.message);
+      }
 
     } catch (err) {
       alert("Server error");
