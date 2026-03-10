@@ -14,6 +14,7 @@ const cognitoAuthConfig = {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    {/* AuthProvider wrapper to provide the app with cognito authentication possible within all components */}
     <AuthProvider {...cognitoAuthConfig}>
       <App />
     </AuthProvider>
