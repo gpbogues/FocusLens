@@ -6,7 +6,9 @@ CREATE TABLE UserData
 	(	UserID int auto_increment NOT NULL Primary KEY,
 		uEmail varchar(50) NOT NULL UNIQUE,
 		uName varchar(30) NOT NULL,
-		uPassword varchar(30) NOT NULL
+		uPassword varchar(30) NOT NULL,
+        verified BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 	
 CREATE TABLE SessionTable
