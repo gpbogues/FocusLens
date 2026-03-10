@@ -33,14 +33,11 @@ const DropdownMenu = ({ isOpen, onClose }: DropdownMenuProps) => {
       <Link to="/metrics" className="dropdown-item" onClick={onClose}>
         Metrics
       </Link>
-<<<<<<< HEAD
-=======
       
       {/* Seb- Added login to dropdown menu temp for easy access, can be removed as needed */}
       <Link to="/login" className="dropdown-item" onClick={onClose}>
         Login
       </Link>
->>>>>>> 98124e8777c05699532414f1f992ced32eca24bd
     </div>
   );
 };
