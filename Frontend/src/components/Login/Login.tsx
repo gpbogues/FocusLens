@@ -9,37 +9,42 @@ import {
 
 type Stage = "login" | "register" | "verify";
 
+//Adding cognito introduced a few more states and functions to handle
 function Login() {
-  const [stage, setStage] = useState<Stage>("login");
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [stage, setStage] = useState<Stage>("login"); //Form type shown, login, register, and verification
+  const [username, setUsername] = useState("");       
+  const [email, setEmail] = useState("");            
   const [password, setPassword] = useState("");
-  const [verifyCode, setVerifyCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [verifyCode, setVerifyCode] = useState("");  //Cognito code, verification only
+  const [loading, setLoading] = useState(false);     //Used for button loading state
 
   const navigate = useNavigate();
 
+  //Resend verification code
   const handleResendCode = async () => {
     try {
       await cognitoResendCode(email);
-      alert("Code resent!");
+      alert("Code resent to your email.");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not resend code.";
+      const message = err instanceof Error ? err.message : "Login.tsx: Could not resend code.";
       alert(message);
     }
   };
 
+  //One big handleSumbit, handles all 3 parts of form
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      //Verify: confirm code, mark verified in RDS, delete from cognito (this is done to prevent cognito from making phantom users)
+
+      //Verify: confirm code, update user verified status in RDS, 
+      //signals delete to cognito user when verification is good 
       if (stage === "verify") {
-        //1, Confirm code with cognito
+        //Confirm code with cognito
         await cognitoConfirmSignUp(email, verifyCode);
 
-        //2, Single backend call: marks verified in RDS AND deletes from cognito
+        //Calls backend, marks user as verified in RDS AND deletes user from cognito
         const res = await fetch("http://100.27.212.225:5000/verify-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -47,11 +52,11 @@ function Login() {
         });
         const data = await res.json();
         if (!data.success) {
-          alert("Verification error: " + data.message);
+          alert("Login.tsx: Verification error: " + data.message);
           return;
         }
 
-        alert("Email verified, you can now log in.");
+        alert("Email verified, you are now a registered user.");
         setStage("login");
         setPassword("");
         setVerifyCode("");
@@ -60,6 +65,7 @@ function Login() {
 
       //Register: write to RDS, then cognito sends verification email
       if (stage === "register") {
+        //Calls backend register API 
         const res = await fetch("http://100.27.212.225:5000/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -79,6 +85,7 @@ function Login() {
       }
 
       //Login: RDS only, blocks unverified users 
+      //Calls backend login API 
       const res = await fetch("http://100.27.212.225:5000/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,16 +96,18 @@ function Login() {
       if (data.success) {
         navigate("/");
       } else {
-        alert(data.message || "Invalid email or password");
+        alert(data.message || "Incorrect email or password");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Server error";
+      const message = err instanceof Error ? err.message : "Login.tsx: Server error";
       alert(message);
     } finally {
       setLoading(false);
     }
   };
 
+
+  //TEXT BOXES, BUTTONS, DIVS, AND++ 
   return (
     <div className="login-container">
       <div className="login-box">
@@ -109,6 +118,7 @@ function Login() {
         </h2>
 
         <form onSubmit={handleSubmit}>
+          {/* Username Box, only used for registeration */}
           {stage === "register" && (
             <input
               type="text"
@@ -119,6 +129,7 @@ function Login() {
             />
           )}
 
+          {/* Email and Password Boxes, used for login and registration */}
           {(stage === "login" || stage === "register") && (
             <>
               <input
@@ -138,10 +149,11 @@ function Login() {
             </>
           )}
 
+          {/* Verification Code Box, only used for verification */}
           {stage === "verify" && (
             <>
               <p className="verify-info">
-                We sent a 6-digit code to <strong>{email}</strong>
+                A 6-digit code was sent to <strong>{email}</strong>
               </p>
               <input
                 type="text"
@@ -161,6 +173,7 @@ function Login() {
             </>
           )}
 
+          {/* Clickable submit buttons for forms */}
           <button type="submit" className="submit-btn" disabled={loading}>
             {loading
               ? "Please wait..."
@@ -172,6 +185,7 @@ function Login() {
           </button>
         </form>
 
+        {/* Toggle button for registration/login */}
         {stage !== "verify" && (
           <p
             onClick={() => setStage(stage === "login" ? "register" : "login")}
@@ -183,11 +197,13 @@ function Login() {
           </p>
         )}
 
+        {/* Verify button */}
         {stage === "verify" && (
           <p onClick={() => setStage("register")} className="toggle-text">
             Back to Register
           </p>
         )}
+        
       </div>
     </div>
   );

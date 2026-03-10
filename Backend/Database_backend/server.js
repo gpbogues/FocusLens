@@ -5,7 +5,8 @@ import cors from "cors";
 import pkg from "aws-sdk";
 const { CognitoIdentityServiceProvider, config: awsConfig } = pkg;
 
-// AWS credentials — add these to your .env file
+//AWS cognito config info, new to env
+//sets up credentials for cognito client, alerts AWS services of default
 awsConfig.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -13,7 +14,7 @@ awsConfig.update({
 });
 
 /*
-BUGS NEED FIXING:
+BUGS NEED FIXING (this might be fixed, still need more testing):
 rn when registering for account, dupe emails are not allowed,
 so if you spam register with the same email, a new account will not be made,
 BUT, UserID still gets incremented, resulting in incosistency between # of users and userIDs
@@ -24,7 +25,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-//MySQL pool, injects connection info from .env file to establish connection
+//MySQL pool, injects connection info from .env file to establish connection with RDS instance
 const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -33,6 +34,7 @@ const db = mysql.createPool({
   port: process.env.DB_PORT,
 });
 
+//Cognito client instance, injects connection info from .env file to connect with AWS Cognito
 const cognito = new CognitoIdentityServiceProvider({ region: "us-east-1" });
 const USER_POOL_ID = "us-east-1_F6PXA7rXB";
 
@@ -42,7 +44,8 @@ const USER_POOL_ID = "us-east-1_F6PXA7rXB";
     const conn = await db.getConnection();
     console.log("Connected to RDS MySQL");
 
-    //Add verified and created_at columns if they don't already exist (in case errors, since verified  is must)
+    //Add verified and created_at columns if they don't already exist 
+    //(in case errors, since verified is must have for user form to function)
     await conn.execute(`
       ALTER TABLE UserData
         ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE,
@@ -52,16 +55,17 @@ const USER_POOL_ID = "us-east-1_F6PXA7rXB";
 
     conn.release();
   } catch (err) {
-    console.error("RDS connection failed:", err);
+    console.error("server.js: RDS connection failed:", err);
   }
 })();
 
 //Used for testing if backend server is online
+//http://100.27.212.225:5000 
 app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
-//Register API, saves user as unverified until email is confirmed
+//Register API, saves user as unverified until email confirmation 
 app.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   try {
@@ -73,9 +77,9 @@ app.post("/register", async (req, res) => {
   } catch (err) {
     console.error(err);
     if (err.code === "ER_DUP_ENTRY" || err.errno === 1062) {
-      return res.status(400).json({ message: "Email already exists" });
+      return res.status(400).json({ message: "server.js: Email already exists" });
     }
-    return res.status(500).json({ message: "User register error" });
+    return res.status(500).json({ message: "server.js: User register error" });
   }
 });
 
@@ -94,17 +98,17 @@ app.post("/login", async (req, res) => {
     }
     res.json({ success: true, username: rows[0].uName, email: rows[0].uEmail });
   } else {
-    res.json({ success: false, message: "Invalid email or password" });
+    res.json({ success: false, message: "server.js: Invalid email or password" });
   }
 });
 
 //Called after Cognito email verification, marks user as verified in RDS
-//then deletes them from Cognito so RDS is the only user store
+//then deletes temp user from Cognito so RDS is the only instance to store user info
 app.post("/verify-complete", async (req, res) => {
   console.log("verify-complete hit with:", req.body)
   const { email } = req.body;
   try {
-    // Mark as verified in RDS
+    //Mark user as verified in RDS
     await db.execute(
       "UPDATE UserData SET verified = TRUE WHERE uEmail = ?",
       [email]
@@ -118,17 +122,18 @@ app.post("/verify-complete", async (req, res) => {
       }).promise();
     } catch (cognitoErr) {
       //Log but don't fail, user is already verified in RDS
-      console.error("Cognito delete error (non-fatal):", cognitoErr.message);
+      //this error just means that if user gets deleted from RDS instance, creates a phantom user in cognito
+      console.error("server.js: Cognito delete error (non-fatal):", cognitoErr.message);
     }
 
     res.json({ success: true });
   } catch (err) {
-    console.error("verify-complete error:", err);
+    console.error("server.js: verify-complete error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-//Fallback delete endpoint (kept for manual use if needed)
+//Manual delete endpoint (for when not logged onto cognito instance via web)
 app.post("/delete-cognito-user", async (req, res) => {
   const { email } = req.body;
   try {
@@ -138,23 +143,31 @@ app.post("/delete-cognito-user", async (req, res) => {
     }).promise();
     res.json({ success: true });
   } catch (err) {
+    console.error("server.js: delete-cognito-user error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 //Cleanup job, runs every 24 hours
+//Needs more testing to be done, for now keep as is
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; 
 
+//The purpose of this is to remove users who didn't finish their verification,
+//users that verify gets deleted off of cognito right away,
+//but those that don't won't be, as such it creates phantoms,
+//this is a way to resolve the issue 
 async function cleanupUnverifiedUsers() {
-  console.log("Running unverified user cleanup...");
+  console.log("server.js: Running unverified user cleanup");
   try {
-    //Find all unverified users older than 24 hours and execute 
+    //Defines unverified users older than 24 hours 
     const [unverifiedUsers] = await db.execute(`
       SELECT uEmail FROM UserData
       WHERE verified = FALSE
       AND created_at < NOW() - INTERVAL 24 HOUR
     `);
 
+    //Basic for loop that traverse userData table to find unverified users
+    //Not final, needs to be reviewed at later point (might be bad given larger user base)
     for (const user of unverifiedUsers) {
       const email = user.uEmail;
       try {
@@ -165,17 +178,17 @@ async function cleanupUnverifiedUsers() {
         }).promise();
       } catch (cognitoErr) {
         //User may not exist in cognito anymore 
-        console.log(`Cognito delete skipped for ${email}: ${cognitoErr.message}`);
+        console.log(`server.js: Cognito delete skipped for ${email}: ${cognitoErr.message}`);
       }
 
-      //Delete from RDS
+      //Also deletes unverified users from RDS
       await db.execute("DELETE FROM UserData WHERE uEmail = ?", [email]);
-      console.log(`Cleaned up unverified user: ${email}`);
+      console.log(`server.js: Cleaned up unverified user: ${email}`);
     }
 
-    console.log(`Cleanup complete. Removed ${unverifiedUsers.length} unverified user(s).`);
+    console.log(`server.js: Cleanup complete. Removed ${unverifiedUsers.length} unverified user(s).`);
   } catch (err) {
-    console.error("Cleanup job error:", err);
+    console.error("server.js: Cleanup job error:", err);
   }
 }
 
@@ -183,6 +196,6 @@ async function cleanupUnverifiedUsers() {
 cleanupUnverifiedUsers();
 setInterval(cleanupUnverifiedUsers, CLEANUP_INTERVAL_MS);
 
-//Runs on port 5000 (localhost 5000), can be updated as needed
+//Runs on port 5000, can be updated as needed
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

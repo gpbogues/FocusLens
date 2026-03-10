@@ -25,4 +25,5 @@ VERY IMPORTANT:
 swap it back to the CloudFront URL before deploying to production
 meaning use envs before final deploy!!!!
 
+Can do so after fronend is hosted 
 */
