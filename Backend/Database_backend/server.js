@@ -72,6 +72,7 @@ app.post("/register", async (req, res) => {
     res.json({ message: "User registered" });
   } catch (err) {
     console.error(err);
+    //This would also trigger if cognito doesn't delete its copy of user 
     if (err.code === "ER_DUP_ENTRY" || err.errno === 1062) {
       return res.status(400).json({ message: "Email already exists" });
     }
