@@ -6,40 +6,60 @@ import {
   cognitoConfirmSignUp,
   cognitoResendCode,
 } from "./cognitoAuth";
+import { useAuth } from "../../context/AuthContext";
 
+//Form stages, used to determine which form to show and which API calls to make on submit
 type Stage = "login" | "register" | "verify";
 
+//Components of overall login functionality
 function Login() {
-  const [stage, setStage] = useState<Stage>("login");
+  const [stage, setStage] = useState<Stage>("login");               //Form type shown, default is login 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [verifyCode, setVerifyCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");                 //Cognito code, verification only
+  const [loading, setLoading] = useState(false);                    //Used for button loading state
+  const [passwordFocused, setPasswordFocused] = useState(false);    //Used to determine when to show password requirements
+  const [showPassword, setShowPassword] = useState(false);          //Checkbox for showing password
 
   const navigate = useNavigate();
+  const { login } = useAuth();
 
+  //Password requirement checks
+  const passwordRequirements = [
+    { label: "Password must be at least 8 characters", met: password.length >= 8 },
+    { label: "Use a number", met: /\d/.test(password) },
+    { label: "Use a lowercase letter", met: /[a-z]/.test(password) },
+    { label: "Use an uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "Use a special character", met: /[^A-Za-z0-9]/.test(password) },
+  ];
+  const allRequirementsMet = passwordRequirements.every((r) => r.met);
+
+  //Resend verification code
   const handleResendCode = async () => {
     try {
       await cognitoResendCode(email);
-      alert("Code resent!");
+      alert("Code resent to your email.");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not resend code.";
+      const message = err instanceof Error ? err.message : "Login.tsx: Could not resend code.";
       alert(message);
     }
   };
 
+  //One big handleSumbit, handles all 3 parts of form
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      //Verify: confirm code, mark verified in RDS, delete from cognito (this is done to prevent cognito from making phantom users)
+      //Verify: confirm code, update user verified status in RDS, 
+      //signals delete to cognito user when verification is good 
       if (stage === "verify") {
-        //1, Confirm code with cognito
+        //Confirm code with cognito
         await cognitoConfirmSignUp(email, verifyCode);
 
-        //2, Single backend call: marks verified in RDS AND deletes from cognito
+        //Calls backend, marks user as verified in RDS AND deletes cognito's copy of user 
         const res = await fetch("http://100.27.212.225:5000/verify-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -47,19 +67,33 @@ function Login() {
         });
         const data = await res.json();
         if (!data.success) {
-          alert("Verification error: " + data.message);
+          alert("Login.tsx: Verification error: " + data.message);
           return;
         }
 
-        alert("Email verified, you can now log in.");
+        alert("Email verified, you are now a registered user.");
         setStage("login");
         setPassword("");
+        setConfirmPassword("");
         setVerifyCode("");
         return;
       }
 
       //Register: write to RDS, then cognito sends verification email
       if (stage === "register") {
+        //Check all password requirements before submitting
+        if (!allRequirementsMet) {
+          alert("Password requirements not met.");
+          return;
+        }
+
+        //Check passwords match
+        if (password !== confirmPassword) {
+          alert("Passwords do not match.");
+          return;
+        }
+
+        //Calls backend register API 
         const res = await fetch("http://100.27.212.225:5000/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -72,6 +106,7 @@ function Login() {
           return;
         }
 
+        //Cognito side 
         await cognitoSignUp(email, password, username);
         setStage("verify");
         alert("A verification code has been sent to your email.");
@@ -79,6 +114,7 @@ function Login() {
       }
 
       //Login: RDS only, blocks unverified users 
+      //Calls backend login API 
       const res = await fetch("http://100.27.212.225:5000/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,61 +123,127 @@ function Login() {
       const data = await res.json();
 
       if (data.success) {
+        login({ username: data.username, email: data.email });
         navigate("/");
       } else {
-        alert(data.message || "Invalid email or password");
+        alert(data.message || "Incorrect email or password");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Server error";
+      const message = err instanceof Error ? err.message : "Login.tsx: Server error";
       alert(message);
     } finally {
       setLoading(false);
     }
   };
 
+  //TEXT BOXES, BUTTONS, DIVS, AND++ SECTION 
   return (
     <div className="login-container">
       <div className="login-box">
         <h2>
           {stage === "login" && "Login"}
-          {stage === "register" && "Register"}
+          {stage === "register" && "Sign up"}
           {stage === "verify" && "Verify Email"}
         </h2>
+        {stage === "register" && (
+          <p className="subtitle">Create a new account.</p>
+        )}
 
         <form onSubmit={handleSubmit}>
+          {/* Username Box, only used for registeration */}
           {stage === "register" && (
-            <input
-              type="text"
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
+            <div className="input-group">
+              <label>Username</label>
+              <input
+                type="text"
+                placeholder="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
           )}
 
+          {/* Email and Password Boxes, used for login and registration */}
           {(stage === "login" || stage === "register") && (
             <>
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="input-group">
+                <label>Email address</label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Password</label>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter password"
+                  value={password}
+                  //These are just React events and handles 
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  onCopy={(e) => e.preventDefault()}
+                  onPaste={(e) => e.preventDefault()}
+                  onCut={(e) => e.preventDefault()}
+                  required
+                />
+
+                {/* Password requirements, only shown during register and when focused or typing */}
+                {/* When fulfilling requirements, they will be marked as met via color(css side) and symbol */}
+                {stage === "register" && (passwordFocused || password.length > 0) && (
+                  <ul className="password-requirements">
+                    {passwordRequirements.map((req) => (
+                      <li key={req.label} className={req.met ? "req-met" : "req-unmet"}>
+                        <span className="req-icon">{req.met ? "✔" : "⊖"}</span>
+                        {req.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Confirm Password, only shown during register */}
+              {stage === "register" && (
+                <div className="input-group">
+                  <label>Confirm password</label>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Re-enter password"
+                    value={confirmPassword}
+                    onCopy={(e) => e.preventDefault()}
+                    onPaste={(e) => e.preventDefault()}
+                    onCut={(e) => e.preventDefault()}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Show password checkbox, only shown during register */}
+              {stage === "register" && (
+                <label className="show-password-label">
+                  <input
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={() => setShowPassword(!showPassword)}
+                  />
+                  Show password
+                </label>
+              )}
             </>
           )}
 
+          {/* Verification code box, only shown during verification */}
           {stage === "verify" && (
             <>
               <p className="verify-info">
-                We sent a 6-digit code to <strong>{email}</strong>
+                A 6-digit code was sent to <strong>{email}</strong>
               </p>
               <input
                 type="text"
@@ -161,28 +263,35 @@ function Login() {
             </>
           )}
 
+          {/* Clickable submit (Sign up/Login) buttons for forms */}
           <button type="submit" className="submit-btn" disabled={loading}>
             {loading
               ? "Please wait..."
               : stage === "login"
               ? "Login"
               : stage === "register"
-              ? "Register"
+              ? "Sign up"
               : "Verify Email"}
           </button>
         </form>
 
+        {/* Clickable toggle button for registration/login */}
         {stage !== "verify" && (
           <p
-            onClick={() => setStage(stage === "login" ? "register" : "login")}
+            onClick={() => {
+              setStage(stage === "login" ? "register" : "login");
+              setPassword("");
+              setConfirmPassword("");
+            }}
             className="toggle-text"
           >
             {stage === "register"
-              ? "Already have an account? Click to Login"
+              ? "Have an account? Click to Sign in"
               : "No account? Click to Register"}
           </p>
         )}
 
+        {/* To exit verification stage */}
         {stage === "verify" && (
           <p onClick={() => setStage("register")} className="toggle-text">
             Back to Register
