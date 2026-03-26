@@ -1,33 +1,28 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DropdownMenu from './DropdownMenu';
+import Sidebar from './Sidebar';
 import './TopBar.css';
 
 const TopBar = () => {
   const navigate = useNavigate();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleTitleClick = () => navigate('/');
-  const toggleDropdown = () => setIsDropdownOpen(prev => !prev);
-  const closeDropdown = () => setIsDropdownOpen(false);
+  const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
+  const closeSidebar = () => setIsSidebarOpen(false);
 
   return (
-    <header className="top-bar">
-      <div className="top-bar-left">
-        <button className="login-btn" onClick={() => navigate('/login')}>
-          Login
+    <>
+      <header className="top-bar">
+        <button className="menu-trigger" onClick={toggleSidebar}>
+          ☰
         </button>
-        <div className="menu-trigger-container">
-          <button className="menu-trigger" onClick={toggleDropdown}>
-            Menu ▼
-          </button>
-          <DropdownMenu isOpen={isDropdownOpen} onClose={closeDropdown} />
-        </div>
-      </div>
-      <h1 className="top-bar-title" onClick={handleTitleClick}>
-        FocusLens
-      </h1>
-    </header>
+        <h1 className="top-bar-title" onClick={handleTitleClick}>
+          FocusLens
+        </h1>
+      </header>
+      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
+    </>
   );
 };
 
