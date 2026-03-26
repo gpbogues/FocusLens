@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "aws-sdk": "^2.1693.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "experss": "^0.0.1-security",

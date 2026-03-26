@@ -13,11 +13,16 @@ const TopBar = () => {
 
   return (
     <header className="top-bar">
-      <div className="menu-trigger-container">
-        <button className="menu-trigger" onClick={toggleDropdown}>
-          Menu ▼
+      <div className="top-bar-left">
+        <button className="login-btn" onClick={() => navigate('/login')}>
+          Login
         </button>
-        <DropdownMenu isOpen={isDropdownOpen} onClose={closeDropdown} />
+        <div className="menu-trigger-container">
+          <button className="menu-trigger" onClick={toggleDropdown}>
+            Menu ▼
+          </button>
+          <DropdownMenu isOpen={isDropdownOpen} onClose={closeDropdown} />
+        </div>
       </div>
       <h1 className="top-bar-title" onClick={handleTitleClick}>
         FocusLens

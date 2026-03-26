@@ -17,8 +17,15 @@
 }
 
 .login-box h2 {
-  text-align: center;
-  margin-bottom: 10px;
+  text-align: left;
+  margin-bottom: 2px;
+}
+
+.subtitle {
+  color: #aaa;
+  font-size: 0.9em;
+  margin-top: 0;
+  margin-bottom: 4px;
 }
 
 .login-box form {
@@ -27,13 +34,78 @@
   gap: 10px;
 }
 
-.login-box input {
+/* Label and input stacked */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.input-group label {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.login-box input[type="text"],
+.login-box input[type="email"],
+.login-box input[type="password"] {
   padding: 10px;
   border-radius: 6px;
   border: 1px solid #555;
   background: #121212;
   color: white;
   font-size: 1em;
+}
+
+.login-box input:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+/* Password requirements list */
+.password-requirements {
+  list-style: none;
+  padding: 6px 0 0 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.password-requirements li {
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.req-unmet {
+  color: #999;
+}
+
+.req-met {
+  color: #4caf50;
+}
+
+.req-icon {
+  font-size: 0.95em;
+}
+
+/* Show password checkbox */
+.show-password-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85em;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.show-password-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
 }
 
 .submit-btn {
@@ -44,10 +116,16 @@
   color: white;
   font-size: 1em;
   cursor: pointer;
+  margin-top: 4px;
 }
 
 .submit-btn:hover {
   background: #535bf2;
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .toggle-text {
@@ -55,4 +133,28 @@
   color: #646cff;
   cursor: pointer;
   font-size: 0.9em;
+}
+
+.toggle-text:hover {
+  text-decoration: underline;
+}
+
+.verify-info {
+  font-size: 0.9em;
+  color: #ccc;
+  text-align: center;
+}
+
+.resend-btn {
+  background: transparent;
+  border: 1px solid #646cff;
+  color: #646cff;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.resend-btn:hover {
+  background: #646cff22;
 }
