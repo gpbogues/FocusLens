@@ -12,10 +12,9 @@ CREATE TABLE UserData
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 
-CREATE TABLE UserSessionSessionIDUserID
+CREATE TABLE UserSession
 	(	SessionID int auto_increment NOT NULL Primary KEY,
 		UserID int NOT NULL,
-        
         sessionStart DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         sessionEnd DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         avgFocus double NOT NULL
@@ -26,7 +25,6 @@ CREATE TABLE SessionChunk
 	(	ChunkId int auto_increment NOT NULL Primary KEY,
 		SessionID int NOT NULL,
         UserID int NOT NULL,
-        
         endOfChunk DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         chunkStatus enum ('VF', 'SF' ,'VU', 'SU')
 	);
