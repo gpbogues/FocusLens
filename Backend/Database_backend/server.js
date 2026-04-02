@@ -123,7 +123,7 @@ app.post("/login", async (req, res) => {
     res.json({ success: true, 
                username: rows[0].uName,
                email: rows[0].uEmail, 
-               userId: rows[0].UserI });
+               userId: rows[0].UserID });
   } else {
     res.json({ success: false, message: "server.js: Invalid email or password" });
   }
