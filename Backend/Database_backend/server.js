@@ -5,8 +5,7 @@ import cors from "cors";
 import pkg from "aws-sdk";
 const { CognitoIdentityServiceProvider, config: awsConfig } = pkg;
 
-//AWS cognito config info, new to env
-//sets up credentials for cognito client, alerts AWS services of default
+//AWS credentials, add these to your .env file if they're not there already
 awsConfig.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -18,6 +17,15 @@ BUGS NEED FIXING (this might be fixed, still need more testing):
 rn when registering for account, dupe emails are not allowed,
 so if you spam register with the same email, a new account will not be made,
 BUT, UserID still gets incremented, resulting in incosistency between # of users and userIDs
+
+TO ADD:
+Friend feature where users can add other unique users to a friend list.
+Several inital checks, isUserVerifed? isRequestSent? requestStatus? (update base on needs),
+This also requries new APIs such as /send-friend-request and such,
+make to update swagger API routes when adding
+
+D3 Observe, to graph db values and poten tables, point is to have it run as a server.js
+without external softwares to be downloaded 
 */
 
 dotenv.config();
@@ -65,7 +73,22 @@ app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
-//Register API, saves user as unverified until email confirmation 
+//UserSession API, saves user info into db after ending session 
+app.post("/session", async (req, res) => {
+  const { userId, sessionStart, sessionEnd } = req.body;
+  try {
+    await db.execute(
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus) VALUES (?, ?, ?, ?)",
+      [userId, sessionStart, sessionEnd, 0]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Session insert error" });
+  }
+});
+
+//Register API, saves user as unverified until email is confirmed
 app.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   try {
@@ -76,6 +99,7 @@ app.post("/register", async (req, res) => {
     res.json({ message: "User registered" });
   } catch (err) {
     console.error(err);
+    //This would also trigger if cognito doesn't delete its copy of user 
     if (err.code === "ER_DUP_ENTRY" || err.errno === 1062) {
       return res.status(400).json({ message: "server.js: Email already exists" });
     }
@@ -96,7 +120,10 @@ app.post("/login", async (req, res) => {
     if (!rows[0].verified) {
       return res.json({ success: false, message: "Please verify your email before logging in." });
     }
-    res.json({ success: true, username: rows[0].uName, email: rows[0].uEmail });
+    res.json({ success: true, 
+               username: rows[0].uName,
+               email: rows[0].uEmail, 
+               userId: rows[0].UserI });
   } else {
     res.json({ success: false, message: "server.js: Invalid email or password" });
   }

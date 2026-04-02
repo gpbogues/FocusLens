@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css";
+import { useAuth } from "../../context/AuthContext"
 import {
   cognitoSignUp,
   cognitoConfirmSignUp,
@@ -123,7 +124,11 @@ function Login() {
       const data = await res.json();
 
       if (data.success) {
-        login({ username: data.username, email: data.email });
+        login({                
+          username: data.username,
+          email: data.email,
+          userId: data.userId,
+        });
         navigate("/");
       } else {
         alert(data.message || "Incorrect email or password");

@@ -1,5 +1,6 @@
 drop table SessionGraphics;
 drop table SessionTable;
+drop table UserFriend;
 drop table UserData;
 
 CREATE TABLE UserData
@@ -10,7 +11,24 @@ CREATE TABLE UserData
         verified BOOLEAN NOT NULL DEFAULT FALSE,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
-	
+    
+
+//this is still work in progress, things like API calls still need to be added,
+//also need to faciliate transaction between two users when adding
+//also features like blocking might be considered (right now its not)
+//right now my thoughts are a friend request creates two inserts into friend table
+//to query friends from table to frontend, you would search there status = accepted 
+
+CREATE TABLE UserFriend 
+	(	FriendPairID int auto_increment NOT NULL PRIMARY KEY,
+		UserID int NOT NULL UNIQUE,
+		friendID int NOT NULL UNIQUE,
+		status ENUM('pending', 'accepted') NOT NULL DEFAULT ('pending'),
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+ALTER TABLE UserFriend ADD CONSTRAINT UserFriend_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
+ALTER TABLE UserFriend ADD CONSTRAINT UserFriend_friendIDfk FOREIGN KEY (friendID) REFERENCES UserData (UserID) ON DELETE CASCADE;
+
 CREATE TABLE SessionTable
 	(	SessionID int auto_increment NOT NULL Primary KEY,
 		UserID int NOT NULL,

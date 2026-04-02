@@ -11,7 +11,8 @@ import {
   ConfirmSignUpCommand,
   ResendConfirmationCodeCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
-//Can be updated as needed, note url directs need to be added on cognito side as well
+
+//NEEDS TO BE UDPATED ONCE FRONTEND IS HOSTED, CURRENTLY USING LOCALHOST FOR TESTING PURPOSES
 const REDIRECT_URI = "http://localhost:5173";
 
 //Used for cognito's login page, works with signInWithHostedUI function, also used for sign out redirection
