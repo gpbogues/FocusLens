@@ -33,6 +33,59 @@
 
 /**
  * @swagger
+ * /session:
+ *   post:
+ *     tags: [Backend]
+ *     summary: Insert a user session
+ *     description: Records a completed session into the UserSession table in RDS. Called from RightSidebar.tsx when the user clicks Stop Session.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, sessionStart, sessionEnd]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               sessionStart:
+ *                 type: string
+ *                 description: Session start timestamp in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+ *                 example: 2026-04-02 11:17:39
+ *               sessionEnd:
+ *                 type: string
+ *                 description: Session end timestamp in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+ *                 example: 2026-04-02 11:17:41
+ *     responses:
+ *       200:
+ *         description: Session inserted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Session insert error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Session insert error
+ */
+
+/**
+ * @swagger
  * /register:
  *   post:
  *     tags: [Backend]
@@ -116,6 +169,9 @@
  *                 email:
  *                   type: string
  *                   example: john@example.com
+ *                 userId:
+ *                   type: integer
+ *                   example: 1
  *                 message:
  *                   type: string
  *                   example: Please verify your email before logging in.
