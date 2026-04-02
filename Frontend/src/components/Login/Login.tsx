@@ -7,7 +7,6 @@ import {
   cognitoConfirmSignUp,
   cognitoResendCode,
 } from "./cognitoAuth";
-import { useAuth } from "../../context/AuthContext";
 
 //Form stages, used to determine which form to show and which API calls to make on submit
 type Stage = "login" | "register" | "verify";
