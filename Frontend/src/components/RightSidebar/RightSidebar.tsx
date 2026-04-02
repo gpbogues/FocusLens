@@ -28,8 +28,13 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
       const endTime = toMySQLDateTime(new Date().toISOString());
       setSessionEnd(endTime);
 
+
+      console.log('userId:', user?.userId);
+      console.log('sessionStart:', sessionStart);
+      console.log('sessionEnd:', endTime);
+
       try {
-        await fetch('http://100.27.212.225:5000/session', {
+        const res =await fetch('http://100.27.212.225:5000/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -38,6 +43,8 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
             sessionEnd: endTime,
           }),
         });
+        const data = await res.json();
+        console.log('Server response:', data);
       } catch (err) {
         console.error('Failed to save session:', err);
       }
