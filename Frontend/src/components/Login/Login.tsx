@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import "./Login.css";
 import { useAuth } from "../../context/AuthContext"
 import {
@@ -13,7 +13,17 @@ type Stage = "login" | "register" | "verify";
 
 //Components of overall login functionality
 function Login() {
-  const [stage, setStage] = useState<Stage>("login");               //Form type shown, default is login 
+  const location = useLocation();                                               //Read navigation state
+  const initialStage = (location.state as { stage?: Stage })?.stage ?? "login"; //Use register if passed, else default login
+  const [stage, setStage] = useState<Stage>(initialStage);                      //Form type shown, default is login 
+
+  //Watches for sidebar navigation changes to update form stage
+  //Fixes bug where after inital click to login/register, form doesn't update anymore from sidebar 
+  useEffect(() => {
+    const incoming = (location.state as { stage?: Stage })?.stage ?? "login";
+    setStage(incoming);
+  }, [location.state]);  //Reruns stage (update location.state) whenever sidebar sends new state
+
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
