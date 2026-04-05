@@ -14,11 +14,17 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const navigate = useNavigate();
 
   //Light/dark mode toggle, defaults to dark
-  const [isDark, setIsDark] = useState(true);
+  //Reads from localStorage for user preference
+  const [isDark, setIsDark] = useState(() => {
+    const stored = localStorage.getItem('theme');
+    return stored ? stored === 'dark' : true;
+  });
 
-  //Apply theme on mount and on change
+  //Apply theme on login and on change, saves preference to localStorage
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const theme = isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);  //saves preference
   }, [isDark]);
 
   const handleLogout = () => {
