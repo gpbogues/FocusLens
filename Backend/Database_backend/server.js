@@ -46,6 +46,30 @@ const db = mysql.createPool({
 const cognito = new CognitoIdentityServiceProvider({ region: "us-east-1" });
 const USER_POOL_ID = process.env.USER_POOL_ID;
 
+//Looks up real Cognito username via email filter before deleting,
+//adminDeleteUser requires the pool username (a UUID) not the email alias,
+//passing the email directly is why deletes were silently failing with 500s
+async function deleteCognitoUserByEmail(email) {
+  const listResult = await cognito.listUsers({
+    UserPoolId: USER_POOL_ID,
+    Filter: `email = "${email}"`,
+    Limit: 1,
+  }).promise();
+
+  if (!listResult.Users || listResult.Users.length === 0) {
+    console.log(`server.js: No Cognito user found for email ${email}, skipping delete`);
+    return;
+  }
+
+  const cognitoUsername = listResult.Users[0].Username;
+  await cognito.adminDeleteUser({
+    UserPoolId: USER_POOL_ID,
+    Username: cognitoUsername,
+  }).promise();
+
+  console.log(`server.js: Deleted Cognito user ${cognitoUsername} (${email})`);
+}
+
 //Used for testing if RDS connection is successful
 (async () => {
   try {
@@ -119,6 +143,39 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ message: "server.js: Email already exists" });
     }
     return res.status(500).json({ message: "server.js: User register error" });
+  }
+});
+
+//Rolls back an RDS insert if cognitoSignUp fails after /register succeeds,
+//prevents the email from being permanently locked out until the 24h cleanup runs
+app.delete("/register-rollback", async (req, res) => {
+  const { email } = req.body;
+  try {
+    await db.execute(
+      "DELETE FROM UserData WHERE uEmail = ? AND verified = FALSE",
+      [email]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("server.js: register-rollback error:", err);
+    res.status(500).json({ success: false, message: "Rollback failed" });
+  }
+});
+
+//Checks if an email is already taken in RDS before creating a Cognito user,
+//prevents phantom Cognito users from being created for duplicate emails
+//since /user/email would reject after the fact with no cleanup path
+app.get("/check-email", async (req, res) => {
+  const { email } = req.query;
+  try {
+    const [rows] = await db.execute(
+      "SELECT UserID FROM UserData WHERE uEmail = ?",
+      [email]
+    );
+    res.json({ available: rows.length === 0 });
+  } catch (err) {
+    console.error("server.js: check-email error:", err);
+    res.status(500).json({ available: false, message: "Check failed" });
   }
 });
 
@@ -207,10 +264,7 @@ app.put("/user/email", async (req, res) => {
 
     //Delete temp cognito user after verification, same pattern as register
     try {
-      await cognito.adminDeleteUser({
-        UserPoolId: USER_POOL_ID,
-        Username: newEmail,
-      }).promise();
+      await deleteCognitoUserByEmail(newEmail);
     } catch (cognitoErr) {
       //Non-fatal, log and continue, resolve on cognito side if this shows up
       console.error("server.js: Cognito delete error (non-fatal):", cognitoErr.message);
@@ -220,22 +274,6 @@ app.put("/user/email", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to update email" });
-  }
-});
-
-// Checks if an email is already taken in RDS before creating a Cognito user
-// Prevents phantom Cognito users from being created for duplicate emails
-app.get("/check-email", async (req, res) => {
-  const { email } = req.query;
-  try {
-    const [rows] = await db.execute(
-      "SELECT UserID FROM UserData WHERE uEmail = ?",
-      [email]
-    );
-    res.json({ available: rows.length === 0 });
-  } catch (err) {
-    console.error("server.js: check-email error:", err);
-    res.status(500).json({ available: false, message: "Check failed" });
   }
 });
 
@@ -253,10 +291,7 @@ app.post("/verify-complete", async (req, res) => {
 
     //Delete from cognito, RDS holds data so no phantoms in cognito
     try {
-      await cognito.adminDeleteUser({
-        UserPoolId: USER_POOL_ID,
-        Username: email,
-      }).promise();
+      await deleteCognitoUserByEmail(email);
     } catch (cognitoErr) {
       //Log but don't fail, user is already verified in RDS
       //this error just means that if user gets deleted from RDS instance, creates a phantom user in cognito
@@ -274,10 +309,7 @@ app.post("/verify-complete", async (req, res) => {
 app.post("/delete-cognito-user", async (req, res) => {
   const { email } = req.body;
   try {
-    await cognito.adminDeleteUser({
-      UserPoolId: USER_POOL_ID,
-      Username: email,
-    }).promise();
+    await deleteCognitoUserByEmail(email);
     res.json({ success: true });
   } catch (err) {
     console.error("server.js: delete-cognito-user error:", err);
@@ -309,10 +341,7 @@ async function cleanupUnverifiedUsers() {
       const email = user.uEmail;
       try {
         //Delete from cognito first (may already be gone, so ignore errors)
-        await cognito.adminDeleteUser({
-          UserPoolId: USER_POOL_ID,
-          Username: email,
-        }).promise();
+        await deleteCognitoUserByEmail(email);
       } catch (cognitoErr) {
         //User may not exist in cognito anymore 
         console.log(`server.js: Cognito delete skipped for ${email}: ${cognitoErr.message}`);
