@@ -23,10 +23,9 @@ const toMySQLDateTime = () => {
 };
 
 const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) => {
-  const { user } = useAuth();
+  const { user, notifySessionSaved } = useAuth(); 
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
-
   const API_URL = import.meta.env.VITE_API_URL;    
 
   const handleToggleSession = async () => {
@@ -47,7 +46,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
 
       try {
         //post data to backend API for storage 
-        const res =await fetch(`${API_URL}/session`, {
+        const res = await fetch(`${API_URL}/session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -58,11 +57,16 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
         });
         const data = await res.json();
         console.log('Server response:', data);
+
+        //Notify Home.tsx to refresh snapshots after successful save
+        if (data.success) {
+          console.log('RightSidebar: session saved, notifying Home');
+          notifySessionSaved();
+        }
       } catch (err) {
         console.error('Failed to save session:', err);
       }
     }
-
     onToggleSession();
   };
 
@@ -77,12 +81,10 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
       >
         {isSessionActive ? 'Stop Session' : 'Start Session'}
       </button>
-
       <div className="session-info-box">
         <span className="session-info-label">Session Start Time</span>
         <span className="session-info-value">{sessionStart || '—'}</span>
       </div>
-
       <div className="session-info-box">
         <span className="session-info-label">Session End Time</span>
         <span className="session-info-value">{sessionEnd || '—'}</span>

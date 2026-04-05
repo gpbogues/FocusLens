@@ -11,6 +11,8 @@ interface AuthContextType {
   user: User | null;
   login: (user: User) => void;
   logout: () => void;
+  sessionTrigger: number;           //help track when a new session is saved
+  notifySessionSaved: () => void;   //called by RightSidebar after a session saves
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -23,20 +25,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return stored ? JSON.parse(stored) : null;
   });
 
+  //Increments by 1 each time a session is saved, Home.tsx watches this value for updating snapshot
+  const [sessionTrigger, setSessionTrigger] = useState(0);
+
   //login stores user info in both state
   const login = (userData: User) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));  
   };
 
-  //for future use when logout is added 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');  
   };
 
+  const notifySessionSaved = () => setSessionTrigger(prev => prev + 1);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, sessionTrigger, notifySessionSaved }}>
       {children}
     </AuthContext.Provider>
   );
