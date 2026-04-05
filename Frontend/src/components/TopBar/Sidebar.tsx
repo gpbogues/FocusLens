@@ -47,23 +47,14 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             </Link>
           </div>
           <div className="sidebar-bottom">
-            {/* Ternary operation of checking if user is logged in */}
-            {user ? (
-              //User logged in, only show log out button
+            {/* Only show Log Out button when user is logged in
+                Note: since login form is presented at the start,
+                no need for login/register buttons, as users will never 
+                see them anyways */}
+            {user && (
               <button className="sidebar-btn sidebar-btn-signin" onClick={handleLogout}>
                 Log Out
               </button>
-            ) : (
-              //User not logged in, show sign in AND sign up buttons
-              <>
-                <Link to="/login" className="sidebar-btn sidebar-btn-signin" onClick={onClose}>
-                  Sign In
-                </Link>
-                {/* Changed so that sign up will bring up registration form instead of login */}
-                <Link to="/login" state={{ stage: 'register' }} className="sidebar-btn sidebar-btn-signup" onClick={onClose}>
-                  Sign Up
-                </Link>
-              </>
             )}
           </div>
         </nav>
