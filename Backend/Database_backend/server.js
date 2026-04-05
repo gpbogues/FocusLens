@@ -147,6 +147,44 @@ app.post("/login", async (req, res) => {
   }
 });
 
+//Updates username in mysql
+app.put("/user/username", async (req, res) => {
+  const { userId, newUsername } = req.body;
+  try {
+    await db.execute(
+      "UPDATE UserData SET uName = ? WHERE UserID = ?",
+      [newUsername, userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to update username" });
+  }
+});
+
+//Updates password in mysql
+app.put("/user/password", async (req, res) => {
+  const { userId, currentPassword, newPassword } = req.body;
+  try {
+    //Verify current password matches before password update
+    const [rows] = await db.execute(
+      "SELECT * FROM UserData WHERE UserID = ? AND uPassword = ?",
+      [userId, currentPassword]
+    );
+    if (rows.length === 0) {
+      return res.json({ success: false, message: "Current password incorrect" });
+    }
+    await db.execute(
+      "UPDATE UserData SET uPassword = ? WHERE UserID = ?",
+      [newPassword, userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to update password" });
+  }
+});
+
 //Called after Cognito email verification, marks user as verified in RDS
 //then deletes temp user from Cognito so RDS is the only instance to store user info
 app.post("/verify-complete", async (req, res) => {
