@@ -88,6 +88,21 @@ app.post("/session", async (req, res) => {
   }
 });
 
+//Fetches 3 most recent sessions for a user (based on userID), used for homepage session snapshots
+app.get("/sessions/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const [rows] = await db.execute(
+      "SELECT sessionStart, sessionEnd FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3",
+      [userId]
+    );
+    res.json({ success: true, sessions: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch sessions" });
+  }
+});
+
 //Register API, saves user as unverified until email is confirmed
 app.post("/register", async (req, res) => {
   const { email, username, password } = req.body;

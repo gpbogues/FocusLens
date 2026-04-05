@@ -1,11 +1,61 @@
 .home-page {
-  width: 100%;
-  padding: 24px;
+  padding: 30px;
 }
 
 .page-heading {
-  font-size: 28px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.87);
-  margin: 0 0 24px 0;
+  font-size: 24px;
+  color: #e5e7eb;
+  margin-bottom: 24px;
+}
+
+.snapshots-container {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.snapshot-card {
+  background-color: #1a1a1a;
+  border: 1px solid #404040;
+  border-radius: 10px;
+  padding: 20px;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.snapshot-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.snapshot-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.snapshot-value {
+  font-size: 13px;
+  color: #e5e7eb;
+}
+
+.snapshot-divider {
+  border-top: 1px solid #404040;
+  margin: 4px 0;
+}
+
+.snapshot-duration {
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.no-sessions {
+  color: #6b7280;
+  font-size: 14px;
 }
