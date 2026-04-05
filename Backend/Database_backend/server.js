@@ -185,6 +185,44 @@ app.put("/user/password", async (req, res) => {
   }
 });
 
+//Updates email in sql, checks for duplicate email first
+//Deletes cognito temp user after verification same as register flow
+app.put("/user/email", async (req, res) => {
+  const { userId, newEmail } = req.body;
+  try {
+    //Check if new email already exists
+    const [existing] = await db.execute(
+      "SELECT * FROM UserData WHERE uEmail = ?",
+      [newEmail]
+    );
+    if (existing.length > 0) {
+      return res.json({ success: false, message: "Email in use" });
+    }
+
+    //Update email in sql
+    await db.execute(
+      "UPDATE UserData SET uEmail = ? WHERE UserID = ?",
+      [newEmail, userId]
+    );
+
+    //Delete temp cognito user after verification, same pattern as register
+    try {
+      await cognito.adminDeleteUser({
+        UserPoolId: USER_POOL_ID,
+        Username: newEmail,
+      }).promise();
+    } catch (cognitoErr) {
+      //Non-fatal, log and continue, resolve on cognito side if this shows up
+      console.error("server.js: Cognito delete error (non-fatal):", cognitoErr.message);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to update email" });
+  }
+});
+
 //Called after Cognito email verification, marks user as verified in RDS
 //then deletes temp user from Cognito so RDS is the only instance to store user info
 app.post("/verify-complete", async (req, res) => {
