@@ -7,6 +7,9 @@ import './Profile.css';
 TODOS:
 
 add in profile and banner editing (aws s3)
+
+fix bug of user not being deleted from cognito,
+this seems to impact user register as well
 */
 
 const Profile = () => {
