@@ -25,6 +25,7 @@ function Login() {
 
   const navigate = useNavigate();
   const { login } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL;                     //Base URL for backend API calls (EC2 instance)
 
   //Password requirement checks
   const passwordRequirements = [
@@ -60,7 +61,7 @@ function Login() {
         await cognitoConfirmSignUp(email, verifyCode);
 
         //Calls backend, marks user as verified in RDS AND deletes cognito's copy of user 
-        const res = await fetch("http://100.27.212.225:5000/verify-complete", {
+        const res = await fetch(`${API_URL}/verify-complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),
@@ -94,7 +95,7 @@ function Login() {
         }
 
         //Calls backend register API 
-        const res = await fetch("http://100.27.212.225:5000/register", {
+        const res = await fetch(`${API_URL}/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, email, password }),
@@ -115,7 +116,7 @@ function Login() {
 
       //Login: RDS only, blocks unverified users 
       //Calls backend login API 
-      const res = await fetch("http://100.27.212.225:5000/login", {
+      const res = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

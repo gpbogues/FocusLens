@@ -9,23 +9,35 @@ interface RightSidebarProps {
 }
 
 //Format stored time to fit with sql timedate format 
-const toMySQLDateTime = (isoString: string) =>
-  isoString.slice(0, 19).replace('T', ' ');
+//Updated to return user current time based off of local timezone,
+//before was simpler but used UTC time for everyone, which created offsets 
+const toMySQLDateTime = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+};
 
 const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) => {
   const { user } = useAuth();
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
 
+  const API_URL = import.meta.env.VITE_API_URL;    
+
   const handleToggleSession = async () => {
     if (!isSessionActive) {
       //Starting session
-      const startTime = toMySQLDateTime(new Date().toISOString());
+      const startTime = toMySQLDateTime();
       setSessionStart(startTime);
       setSessionEnd('');
     } else {
       //Ending session, and afterwards, post info to backend session API 
-      const endTime = toMySQLDateTime(new Date().toISOString());
+      const endTime = toMySQLDateTime();
       setSessionEnd(endTime);
 
       //f12 console logging 
@@ -35,7 +47,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
 
       try {
         //post data to backend API for storage 
-        const res =await fetch('http://100.27.212.225:5000/session', {
+        const res =await fetch(`${API_URL}/session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

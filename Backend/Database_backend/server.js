@@ -44,7 +44,7 @@ const db = mysql.createPool({
 
 //Cognito client instance, injects connection info from .env file to connect with AWS Cognito
 const cognito = new CognitoIdentityServiceProvider({ region: "us-east-1" });
-const USER_POOL_ID = "us-east-1_F6PXA7rXB";
+const USER_POOL_ID = process.env.USER_POOL_ID;
 
 //Used for testing if RDS connection is successful
 (async () => {
@@ -68,7 +68,6 @@ const USER_POOL_ID = "us-east-1_F6PXA7rXB";
 })();
 
 //Used for testing if backend server is online
-//http://100.27.212.225:5000 
 app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
