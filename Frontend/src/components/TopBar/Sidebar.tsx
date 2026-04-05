@@ -15,7 +15,22 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const handleLogout = () => {
     logout();
     onClose();
-    navigate('/login');
+
+    //Scale out the layout before changing to login
+    const el = document.querySelector('.layout-container') as HTMLElement | null;
+    if (el) {
+      el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'scale(0.92)';
+    }
+    //Wait for animation to finish before switching forms 
+    setTimeout(() => {
+      if (el) {
+        el.style.opacity = '';
+        el.style.transform = '';
+      }
+      navigate('/login');
+    }, 400);
   };
 
   return (

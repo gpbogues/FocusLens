@@ -142,7 +142,18 @@ function Login() {
           email: data.email,
           userId: data.userId,
         });
-        navigate("/");
+
+        //Scale out the login box before navigating to home
+        const el = document.querySelector('.login-box') as HTMLElement | null;
+        if (el) {
+          el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+          el.style.opacity = '0';
+          el.style.transform = 'scale(0.92)';
+        }
+        //Wait for animation to finish before navigating
+        setTimeout(() => {
+          navigate('/');
+        }, 400);
       } else {
         alert(data.message || "Incorrect email or password");
       }

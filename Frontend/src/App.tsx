@@ -17,24 +17,27 @@ function App() {
 
   return (
     <AuthProvider>
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <Layout
-              isSessionActive={isSessionActive}
-              onToggleSession={handleToggleSession}
-            />
-          }
-        >
-          <Route index element={<Home />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="metrics" element={<Metrics />} />
-          <Route path="login" element={<Login />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+      <BrowserRouter>
+        <Routes>
+          {/* Moved login outside of layout, no longer wrapped, standalone login */}
+          <Route path="/login" element={<Login />} />
+
+          {/* All other pages still use layout */}
+          <Route
+            path="/"
+            element={
+              <Layout
+                isSessionActive={isSessionActive}
+                onToggleSession={handleToggleSession}
+              />
+            }
+          >
+            <Route index element={<Home />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="metrics" element={<Metrics />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     </AuthProvider>
   )
 }
