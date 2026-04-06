@@ -34,9 +34,8 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     return localStorage.getItem('avatarId') || 'fox';
   });
 
-  //Apply theme via data-theme attribute on document root (matches App.css variables)
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+    document.body.classList.toggle('light-mode', !isDarkMode);
   }, [isDarkMode]);
 
   const setIsDarkMode = (v: boolean) => {

@@ -1,7 +1,7 @@
 .top-bar {
   height: 60px;
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  background-color: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   padding: 0 24px;
@@ -14,16 +14,16 @@
   padding: 8px 12px;
   font-size: 20px;
   font-weight: 500;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.25s;
 }
 
 .menu-trigger:hover {
-  background-color: var(--hover-bg);
+  background-color: var(--color-bg-hover);
 }
 
 .top-bar-title {
@@ -32,12 +32,12 @@
   transform: translateX(-50%);
   font-size: 24px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   cursor: pointer;
   transition: color 0.25s;
   margin: 0;
 }
 
 .top-bar-title:hover {
-  color: #646cff;
+  color: var(--color-accent);
 }
