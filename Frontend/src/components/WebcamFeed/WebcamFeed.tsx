@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSettings } from '../../context/SettingsContext';
 import './WebcamFeed.css';
 
 interface WebcamFeedProps {
@@ -7,7 +6,6 @@ interface WebcamFeedProps {
 }
 
 const WebcamFeed = ({ isActive }: WebcamFeedProps) => {
-  const { cameraEnabled, micEnabled } = useSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
@@ -17,7 +15,7 @@ const WebcamFeed = ({ isActive }: WebcamFeedProps) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: micEnabled,
+          audio: false
         });
 
         streamRef.current = stream;
@@ -46,7 +44,7 @@ const WebcamFeed = ({ isActive }: WebcamFeedProps) => {
       setError('');
     };
 
-    if (isActive && cameraEnabled) {
+    if (isActive) {
       startWebcam();
     } else {
       stopWebcam();
@@ -55,18 +53,7 @@ const WebcamFeed = ({ isActive }: WebcamFeedProps) => {
     return () => {
       stopWebcam();
     };
-  }, [isActive, cameraEnabled, micEnabled]);
-
-  if (!cameraEnabled) {
-    return (
-      <div className="webcam-feed">
-        <div className="camera-disabled">
-          <span className="camera-disabled-icon">📷</span>
-          <span>Camera disabled in settings</span>
-        </div>
-      </div>
-    );
-  }
+  }, [isActive]);
 
   return (
     <div className="webcam-feed">
@@ -79,7 +66,7 @@ const WebcamFeed = ({ isActive }: WebcamFeedProps) => {
               ref={videoRef}
               autoPlay
               playsInline
-              muted={!micEnabled}
+              muted
               className="video-element"
             />
           )}
