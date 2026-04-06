@@ -8,6 +8,16 @@ import {
   cognitoResendCode,
 } from "./cognitoAuth";
 
+/* 
+Bug:
+happened once but upon start of web app,
+login/register page and logout are gone,
+user profile also contained no info,
+
+fix was to load a seperate branch that didn't contain most recent login changes,
+this could be related to local/session storage, and clearing that out
+*/
+
 //NOTE: 
 //this got reverted to the state prior to logout button implementation,
 //as login/register sidebar buttons are removed with login form being independent and presented at the start 
@@ -186,7 +196,22 @@ function Login() {
   //TEXT BOXES, BUTTONS, DIVS, AND++ SECTION 
   return (
     <div className="login-container">
+
+      {/* Video background */}
+      <video
+        className="bg-video"
+        autoPlay
+        loop
+        muted
+        playsInline
+        src="/bg.mp4"
+        controls={false}
+        disablePictureInPicture
+        controlsList="nodownload nofullscreen noremoteplayback"
+      />
+      
       <div className="login-box">
+        <div key={stage} className="form-slide">
         <h2>
           {stage === "login" && "Login"}
           {stage === "register" && "Sign up"}
@@ -344,6 +369,7 @@ function Login() {
             Back to Register
           </p>
         )}
+        </div> {/* form-slide */}
       </div>
     </div>
   );
