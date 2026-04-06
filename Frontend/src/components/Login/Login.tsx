@@ -112,8 +112,31 @@ function Login() {
           return;
         }
 
-        //Cognito side 
-        await cognitoSignUp(email, password, username);
+        //Cognito side, if cognitoSignUp fails after rds insert succeeds,
+        //roll back the rds row so the email isn't locked until the 24h cleanup run,
+        //also handles UsernameExistsException from phantom users(from abandoned email updates)
+        try {
+          await cognitoSignUp(email, password, username);
+        } catch (cognitoErr: any) {
+          if (cognitoErr.code === "UsernameExistsException") {
+            //Phantom user from an abandoned email update, delete it and retry
+            await fetch(`${API_URL}/delete-cognito-user`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+            await cognitoSignUp(email, password, username); //retry once
+          } else {
+            //Any other cognito failure, roll back the rds insert
+            await fetch(`${API_URL}/register-rollback`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+            throw cognitoErr;
+          }
+        }
+
         setStage("verify");
         alert("A verification code has been sent to your email.");
         return;

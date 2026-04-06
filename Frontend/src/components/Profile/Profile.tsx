@@ -8,8 +8,7 @@ TODOS:
 
 add in profile and banner editing (aws s3)
 
-fix bug of user not being deleted from cognito,
-this seems to impact user register as well
+remove password reveal feature later (rn non issue)
 */
 
 const Profile = () => {
@@ -53,7 +52,17 @@ const Profile = () => {
     setConfirmPassword('');
   };
 
+  //If user bails mid email verify, clean up the abandoned cognito user,
+  //otherwise the phantom sits in cognito until the cleanup job runs,
+  //which can block the same email from being used in registration
   const closeModal = () => {
+    if (modal === 'email-verify' && newEmail) {
+      fetch(`${API_URL}/delete-cognito-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail }),
+      }).catch(() => {}); //fire and forget, non-fatal
+    }
     setModal(null);
     setModalError('');
   };
@@ -94,6 +103,15 @@ const Profile = () => {
     }
     setModalLoading(true);
     try {
+      //Check if new email is already taken in rds BEFORE creating cognito user,
+      //without this check, a taken email would create a phantom user with no cleanup path since /user/email would reject it afterwards
+      const checkRes = await fetch(`${API_URL}/check-email?email=${encodeURIComponent(newEmail)}`);
+      const checkData = await checkRes.json();
+      if (!checkData.available) {
+        setModalError('Email is already in use');
+        return;
+      }
+
       //Uses random temp password since cognito requires a password 
       const tempPassword = `Temp@${Math.random().toString(36).slice(2, 10)}1A!`;
       await cognitoSignUp(newEmail, tempPassword, user?.username ?? '');
