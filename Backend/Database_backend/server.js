@@ -3,6 +3,7 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import cors from "cors";
 import pkg from "aws-sdk";
+dotenv.config();
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { v4 as uuid } from "uuid";
@@ -38,9 +39,7 @@ D3 Observe, to graph db values and poten tables, point is to have it run as a se
 without external softwares to be downloaded 
 */
 
-dotenv.config();
 const app = express();
-import cors from 'cors';
 
 app.use(cors({
   origin: [
@@ -115,7 +114,7 @@ app.get("/", (req, res) => {
 });
 
 // POST /user/avatar/presigned-url
-router.post('/user/avatar/presigned-url', requireAuth, async (req, res) => {
+app.post('/user/avatar/presigned-url', async (req, res) => {
   const { userId, fileType } = req.body;
 
   const allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -139,7 +138,7 @@ router.post('/user/avatar/presigned-url', requireAuth, async (req, res) => {
 });
 
 // PUT /user/avatar
-router.put('/user/avatar', requireAuth, async (req, res) => {
+app.put('/user/avatar', async (req, res) => {
   const { userId, avatarUrl } = req.body;
 
   await db.query(
