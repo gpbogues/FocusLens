@@ -214,16 +214,8 @@ app.put("/user/username", async (req, res) => {
 
 //Updates password in mysql
 app.put("/user/password", async (req, res) => {
-  const { userId, currentPassword, newPassword } = req.body;
+  const { userId, newPassword } = req.body;
   try {
-    //Verify current password matches before password update
-    const [rows] = await db.execute(
-      "SELECT * FROM UserData WHERE UserID = ? AND uPassword = ?",
-      [userId, currentPassword]
-    );
-    if (rows.length === 0) {
-      return res.json({ success: false, message: "Current password incorrect" });
-    }
     await db.execute(
       "UPDATE UserData SET uPassword = ? WHERE UserID = ?",
       [newPassword, userId]
@@ -381,6 +373,37 @@ app.put("/user/avatar", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to save avatar URL" });
+  }
+});
+
+//Removes avatar URL from DB and deletes the S3 object
+app.delete("/user/avatar", async (req, res) => {
+  const { userId } = req.body;
+  try {
+    const [rows] = await db.execute(
+      "SELECT avatarUrl FROM UserData WHERE UserID = ?",
+      [userId]
+    );
+    const oldUrl = rows[0]?.avatarUrl;
+
+    await db.execute(
+      "UPDATE UserData SET avatarUrl = NULL WHERE UserID = ?",
+      [userId]
+    );
+
+    if (oldUrl && oldUrl.includes(process.env.S3_AVATAR_BUCKET)) {
+      const oldKey = new URL(oldUrl).pathname.slice(1);
+      await s3.deleteObject({
+        Bucket: process.env.S3_AVATAR_BUCKET,
+        Key: oldKey,
+      }).promise();
+      console.log(`server.js: Deleted avatar from S3: ${oldKey}`);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to remove avatar" });
   }
 });
 

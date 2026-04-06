@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { cognitoSignUp, cognitoConfirmSignUp, cognitoResendCode } from '../Login/cognitoAuth';
+import AvatarEditor from './AvatarEditor';
 import './Profile.css';
 
 const AVATAR_PRESETS = [
@@ -31,10 +32,12 @@ const Profile = () => {
   const selectedAvatar = AVATAR_PRESETS.find(a => a.id === avatarId) ?? AVATAR_PRESETS[0];
   const isCustomSelected = avatarId === CUSTOM_AVATAR_ID;
 
-  // ── Custom avatar state ──
+  //Custom avatar state
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [editorFile, setEditorFile] = useState<File | null>(null);
+  const [avatarMenu, setAvatarMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,10 +48,33 @@ const Profile = () => {
 
   const handleUploadClick = () => {
     setUploadError('');
-    fileInputRef.current?.click();
+    if (customAvatarUrl) {
+      setAvatarMenu(prev => !prev);
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRemoveAvatar = async () => {
+    setAvatarMenu(false);
+    setUploadLoading(true);
+    try {
+      await fetch(`${API_URL}/user/avatar`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId }),
+      });
+      setCustomAvatarUrl(null);
+      setAvatarId(AVATAR_PRESETS[0].id);
+      updateUser({ avatarUrl: null });
+    } catch {
+      setUploadError('Failed to remove avatar');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -63,30 +89,37 @@ const Profile = () => {
       return;
     }
 
+    setUploadError('');
+    setEditorFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleEditorApply = async (blob: Blob) => {
+    setEditorFile(null);
     setUploadLoading(true);
     setUploadError('');
 
     try {
-      // 1. Request presigned URL from your backend
+      //Request presigned URL from backend
       const res = await fetch(`${API_URL}/user/avatar/presigned-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.userId, fileType: file.type }),
+        body: JSON.stringify({ userId: user?.userId, fileType: 'image/png' }),
       });
 
       if (!res.ok) throw new Error('Failed to get upload URL');
       const { uploadUrl, publicUrl } = await res.json();
 
-      // 2. Upload directly to S3
+      //Upload cropped blob directly to S3
       const s3Res = await fetch(uploadUrl, {
         method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
+        body: blob,
+        headers: { 'Content-Type': 'image/png' },
       });
 
       if (!s3Res.ok) throw new Error('Upload to S3 failed');
 
-      // 3. Save the public URL to the user's profile
+      //Save the public URL to the user's profile
       const saveRes = await fetch(`${API_URL}/user/avatar`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -102,20 +135,18 @@ const Profile = () => {
       setUploadError(err.message || 'Upload failed');
     } finally {
       setUploadLoading(false);
-      // Reset input so the same file can be re-selected if needed
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  // ── Account section state ──
+  //Account section state 
   const [revealEmail, setRevealEmail] = useState(false);
   const [modal, setModal] = useState<'username' | 'email' | 'email-verify' | 'password' | null>(null);
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [emailVerifyCode, setEmailVerifyCode] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPasswordFocused, setNewPasswordFocused] = useState(false);
   const [modalError, setModalError] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
 
@@ -127,9 +158,9 @@ const Profile = () => {
     setNewUsername('');
     setNewEmail('');
     setEmailVerifyCode('');
-    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setNewPasswordFocused(false);
   };
 
   const closeModal = () => {
@@ -204,7 +235,7 @@ const Profile = () => {
   const allRequirementsMet = passwordRequirements.every(r => r.met);
 
   const handlePasswordUpdate = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       setModalError('All fields are required'); return;
     }
     if (newPassword !== confirmPassword) { setModalError('New passwords do not match'); return; }
@@ -214,7 +245,7 @@ const Profile = () => {
       const res = await fetch(`${API_URL}/user/password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.userId, currentPassword, newPassword }),
+        body: JSON.stringify({ userId: user?.userId, newPassword }),
       });
       const data = await res.json();
       if (data.success) closeModal();
@@ -224,6 +255,7 @@ const Profile = () => {
   };
 
   return (
+    <>
     <div className="profile-page">
       <h2 className="page-heading">Profile</h2>
 
@@ -274,7 +306,7 @@ const Profile = () => {
             >
               {uploadLoading ? (
                 <span className="avatar-upload-spinner" />
-              ) : isCustomSelected && customAvatarUrl ? (
+              ) : customAvatarUrl ? (
                 <img src={customAvatarUrl} alt="Custom" className="avatar-upload-preview-img" />
               ) : (
                 <span className="avatar-upload-plus">+</span>
@@ -287,6 +319,22 @@ const Profile = () => {
               style={{ display: 'none' }}
               onChange={handleFileChange}
             />
+            {avatarMenu && (
+              <>
+                <div className="avatar-menu-backdrop" onClick={() => setAvatarMenu(false)} />
+                <div className="avatar-menu">
+                  <button className="avatar-menu-item" onClick={() => { setAvatarMenu(false); fileInputRef.current?.click(); }}>
+                    Change Picture
+                  </button>
+                  <button className="avatar-menu-item" onClick={() => { setAvatarMenu(false); setAvatarId(CUSTOM_AVATAR_ID); }}>
+                    Use Picture
+                  </button>
+                  <button className="avatar-menu-item avatar-menu-item--danger" onClick={handleRemoveAvatar}>
+                    Remove Picture
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -326,10 +374,7 @@ const Profile = () => {
 
           {/* Password row */}
           <div className="settings-row account-row">
-            <div className="settings-row-info">
-              <span className="settings-row-desc">Password</span>
-              <span className="settings-row-title">••••••••</span>
-            </div>
+            <span className="settings-row-desc">Password</span>
             <button className="account-edit-btn" onClick={() => openModal('password')}>Edit</button>
           </div>
         </div>
@@ -477,18 +522,13 @@ const Profile = () => {
             <input
               className="modal-input"
               type="password"
-              placeholder="Current password"
-              value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)}
-            />
-            <input
-              className="modal-input"
-              type="password"
               placeholder="New password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
+              onFocus={() => setNewPasswordFocused(true)}
+              onBlur={() => setNewPasswordFocused(false)}
             />
-            {newPassword.length > 0 && (
+            {newPasswordFocused && (
               <ul className="modal-requirements">
                 {passwordRequirements.map(r => (
                   <li key={r.label} className={r.met ? 'req-met' : 'req-unmet'}>
@@ -516,6 +556,15 @@ const Profile = () => {
       )}
 
     </div>
+
+    {editorFile && (
+      <AvatarEditor
+        file={editorFile}
+        onApply={handleEditorApply}
+        onCancel={() => setEditorFile(null)}
+      />
+    )}
+    </>
   );
 };
 
