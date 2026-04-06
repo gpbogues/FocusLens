@@ -40,7 +40,15 @@ without external softwares to be downloaded
 
 dotenv.config();
 const app = express();
-app.use(cors());
+import cors from 'cors';
+
+app.use(cors({
+  origin: [
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
+}));
 app.use(express.json());
 
 //MySQL pool, injects connection info from .env file to establish connection with RDS instance
@@ -106,43 +114,40 @@ app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
+// POST /user/avatar/presigned-url
 router.post('/user/avatar/presigned-url', requireAuth, async (req, res) => {
-  try {
-    const { userId, fileType } = req.body;
+  const { userId, fileType } = req.body;
 
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(fileType)) {
-      return res.status(400).json({ error: 'Invalid file type' });
-    }
-
-    const ext = fileType.split('/')[1];
-    const key = `avatars/${userId}/${uuid()}.${ext}`;
-
-    const command = new PutObjectCommand({
-      Bucket: process.env.S3_AVATAR_BUCKET,
-      Key: key,
-      ContentType: fileType,
-    });
-
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
-    const publicUrl = `https://${process.env.S3_AVATAR_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-
-    res.json({ uploadUrl, publicUrl });
-  } catch (err) {
-    console.error('Presigned URL error:', err);
-    res.status(500).json({ error: 'Failed to generate upload URL' });
+  const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowed.includes(fileType)) {
+    return res.status(400).json({ error: 'Invalid file type' });
   }
+
+  const ext = fileType.split('/')[1];
+  const key = `avatars/${userId}/${uuid()}.${ext}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.S3_AVATAR_BUCKET,
+    Key: key,
+    ContentType: fileType,
+  });
+
+  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
+  const publicUrl = `https://${process.env.S3_AVATAR_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
+  res.json({ uploadUrl, publicUrl });
 });
 
+// PUT /user/avatar
 router.put('/user/avatar', requireAuth, async (req, res) => {
-  try {
-    const { userId, avatarUrl } = req.body;
-    await db.query('UPDATE UserData SET avatarUrl = ? WHERE UserID = ?', [avatarUrl, userId]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Avatar update error:', err);
-    res.status(500).json({ error: 'Failed to save avatar' });
-  }
+  const { userId, avatarUrl } = req.body;
+
+  await db.query(
+    'UPDATE UserData SET avatarUrl = ? WHERE UserID = ?',
+    [avatarUrl, userId]
+  );
+
+  res.json({ success: true });
 });
 
 //UserSession API, saves user info into db after ending session 
