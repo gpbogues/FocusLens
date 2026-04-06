@@ -5,7 +5,7 @@ import cors from "cors";
 import pkg from "aws-sdk";
 const { CognitoIdentityServiceProvider, S3, config: awsConfig } = pkg;
 
-//AWS credentials, add these to your .env file if they're not there already
+//AWS credentials (changed to ec2 backend, no longer needed local)
 awsConfig.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
