@@ -142,7 +142,7 @@
  *   post:
  *     tags: [Backend]
  *     summary: Register a new user
- *     description: Creates a new unverified user in RDS. User cannot log in until email is verified.
+ *     description: Creates a new unverified user in RDS. User cannot log in until email is verified. If cognitoSignUp fails after this succeeds, call /register-rollback to remove the RDS row.
  *     requestBody:
  *       required: true
  *       content:
@@ -181,6 +181,54 @@
  *                 message:
  *                   type: string
  *                   example: Email already exists
+ */
+
+/**
+ * @swagger
+ * /register-rollback:
+ *   delete:
+ *     tags: [Backend]
+ *     summary: Roll back a failed registration
+ *     description: >
+ *       Deletes an unverified RDS user row if cognitoSignUp fails after /register succeeds.
+ *       Prevents the email from being permanently locked out until the 24h cleanup job runs.
+ *       Only deletes rows where verified = FALSE as a safety guard against removing verified users.
+ *       Called from Login.tsx if cognitoSignUp throws a non-UsernameExistsException error.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: john@example.com
+ *     responses:
+ *       200:
+ *         description: Rollback successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Rollback failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Rollback failed
  */
 
 /**
@@ -231,6 +279,52 @@
 
 /**
  * @swagger
+ * /check-email:
+ *   get:
+ *     tags: [Backend]
+ *     summary: Check if an email is available
+ *     description: >
+ *       Checks RDS to see if an email is already registered before creating a Cognito user.
+ *       Called from Profile.tsx before cognitoSignUp during the email update flow.
+ *       Prevents phantom Cognito users from being created for duplicate emails,
+ *       since /user/email would reject the duplicate after Cognito verification with no cleanup path.
+ *       Note that /user/email also checks for duplicates as a race condition guard.
+ *     parameters:
+ *       - in: query
+ *         name: email
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: john@example.com
+ *         description: Email address to check availability for
+ *     responses:
+ *       200:
+ *         description: Availability result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 available:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Check failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 available:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Check failed
+ */
+
+/**
+ * @swagger
  * /verify-complete:
  *   post:
  *     tags: [Backend]
@@ -275,11 +369,173 @@
 
 /**
  * @swagger
+ * /user/username:
+ *   put:
+ *     tags: [Backend]
+ *     summary: Update a user's username
+ *     description: Updates the uName field in RDS for the given user. Called from Profile.tsx when the user submits the username modal.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, newUsername]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               newUsername:
+ *                 type: string
+ *                 example: janedoe
+ *     responses:
+ *       200:
+ *         description: Username updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Failed to update username
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to update username
+ */
+
+/**
+ * @swagger
+ * /user/email:
+ *   put:
+ *     tags: [Backend]
+ *     summary: Update a user's email
+ *     description: >
+ *       Updates the uEmail field in RDS and deletes the temp Cognito user after verification.
+ *       Called from Profile.tsx after cognitoConfirmSignUp succeeds in the email update flow.
+ *       Checks for duplicate emails as a race condition guard (pre-check is done by /check-email earlier in the flow).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, newEmail]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               newEmail:
+ *                 type: string
+ *                 example: newemail@example.com
+ *     responses:
+ *       200:
+ *         description: Email update result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Email in use
+ *       500:
+ *         description: Failed to update email
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to update email
+ */
+
+/**
+ * @swagger
+ * /user/password:
+ *   put:
+ *     tags: [Backend]
+ *     summary: Update a user's password
+ *     description: Verifies the current password matches before updating uPassword in RDS. Called from Profile.tsx when the user submits the password modal.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, currentPassword, newPassword]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               currentPassword:
+ *                 type: string
+ *                 example: OldPassword123!
+ *               newPassword:
+ *                 type: string
+ *                 example: NewPassword456!
+ *     responses:
+ *       200:
+ *         description: Password update result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Current password incorrect
+ *       500:
+ *         description: Failed to update password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to update password
+ */
+
+/**
+ * @swagger
  * /delete-cognito-user:
  *   post:
  *     tags: [Backend]
  *     summary: Manually delete a Cognito user
- *     description: Fallback endpoint to manually remove a user from Cognito. Not called automatically. Used for blockage (cognito side) clearing if it occurs.
+ *     description: >
+ *       Fallback endpoint to manually remove a user from Cognito by email.
+ *       Uses deleteCognitoUserByEmail() which first calls listUsers to resolve the real
+ *       Cognito username (a UUID) before calling adminDeleteUser, since passing email
+ *       directly to adminDeleteUser causes a MissingRequiredParameter failure.
+ *       Also called from Profile.tsx when the email-verify modal is closed mid-flow
+ *       to clean up the orphaned Cognito user before it becomes a phantom.
  *     requestBody:
  *       required: true
  *       content:
@@ -332,7 +588,9 @@
  *       Frontend SDK call — NOT an HTTP endpoint.
  *       Creates a temporary Cognito user and triggers a 6-digit verification email.
  *       Called from Login.tsx after a successful /register backend call.
- *       The Cognito user is deleted after verification via /verify-complete.
+ *       Also called from Profile.tsx during the email update flow after /check-email confirms availability.
+ *       The Cognito user is deleted after verification via /verify-complete (registration) or /user/email (email update).
+ *       If cognitoSignUp throws UsernameExistsException, Login.tsx calls /delete-cognito-user to clear the phantom and retries.
  *       Uses SignUpCommand from @aws-sdk/client-cognito-identity-provider.
  *     requestBody:
  *       required: true
@@ -348,6 +606,7 @@
  *                 example: john@example.com
  *               password:
  *                 type: string
+ *                 description: Real password for registration, random temp password for email update flow
  *                 example: Password123!
  *               username:
  *                 type: string
@@ -376,8 +635,10 @@
  *     description: >
  *       Frontend SDK call — NOT an HTTP endpoint.
  *       Validates the 6-digit code the user received via email.
- *       Called from Login.tsx when the user submits the verification code.
- *       On success, Login.tsx then calls /verify-complete on the backend.
+ *       Called from Login.tsx when the user submits the verification code during registration.
+ *       Also called from Profile.tsx when the user submits the code during the email update flow.
+ *       On success during registration, Login.tsx then calls /verify-complete on the backend.
+ *       On success during email update, Profile.tsx then calls /user/email on the backend.
  *       Uses ConfirmSignUpCommand from @aws-sdk/client-cognito-identity-provider.
  *     requestBody:
  *       required: true
@@ -411,7 +672,8 @@
  *     description: >
  *       Frontend SDK call — NOT an HTTP endpoint.
  *       Resends the verification email if the code expired or wasn't received.
- *       Called from Login.tsx when user clicks the "Resend code" button.
+ *       Called from Login.tsx when user clicks "Resend code" during registration verify stage.
+ *       Also called from Profile.tsx when user clicks "Resend code" during the email update verify modal.
  *       Uses ResendConfirmationCodeCommand from @aws-sdk/client-cognito-identity-provider.
  *     requestBody:
  *       required: true

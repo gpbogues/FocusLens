@@ -11,6 +11,7 @@ interface AuthContextType {
   user: User | null;
   login: (user: User) => void;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
   sessionTrigger: number;           //help track when a new session is saved
   notifySessionSaved: () => void;   //called by RightSidebar after a session saves
 }
@@ -39,10 +40,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('user');  
   };
 
+  //Updates user fields in context and localStorage
+   const updateUser = (updates: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...updates };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const notifySessionSaved = () => setSessionTrigger(prev => prev + 1);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, sessionTrigger, notifySessionSaved }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, sessionTrigger, notifySessionSaved }}>
       {children}
     </AuthContext.Provider>
   );

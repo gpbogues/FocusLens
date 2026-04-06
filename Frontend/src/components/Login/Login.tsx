@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Login.css";
 import { useAuth } from "../../context/AuthContext"
 import {
@@ -8,21 +8,16 @@ import {
   cognitoResendCode,
 } from "./cognitoAuth";
 
+//NOTE: 
+//this got reverted to the state prior to logout button implementation,
+//as login/register sidebar buttons are removed with login form being independent and presented at the start 
+
 //Form stages, used to determine which form to show and which API calls to make on submit
 type Stage = "login" | "register" | "verify";
 
 //Components of overall login functionality
 function Login() {
-  const location = useLocation();                                               //Read navigation state
-  const initialStage = (location.state as { stage?: Stage })?.stage ?? "login"; //Use register if passed, else default login
-  const [stage, setStage] = useState<Stage>(initialStage);                      //Form type shown, default is login 
-
-  //Watches for sidebar navigation changes to update form stage
-  //Fixes bug where after inital click to login/register, form doesn't update anymore from sidebar 
-  useEffect(() => {
-    const incoming = (location.state as { stage?: Stage })?.stage ?? "login";
-    setStage(incoming);
-  }, [location.state]);  //Reruns stage (update location.state) whenever sidebar sends new state
+  const [stage, setStage] = useState<Stage>("login");  //Form type shown, default is login
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -117,8 +112,31 @@ function Login() {
           return;
         }
 
-        //Cognito side 
-        await cognitoSignUp(email, password, username);
+        //Cognito side, if cognitoSignUp fails after rds insert succeeds,
+        //roll back the rds row so the email isn't locked until the 24h cleanup run,
+        //also handles UsernameExistsException from phantom users(from abandoned email updates)
+        try {
+          await cognitoSignUp(email, password, username);
+        } catch (cognitoErr: any) {
+          if (cognitoErr.code === "UsernameExistsException") {
+            //Phantom user from an abandoned email update, delete it and retry
+            await fetch(`${API_URL}/delete-cognito-user`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+            await cognitoSignUp(email, password, username); //retry once
+          } else {
+            //Any other cognito failure, roll back the rds insert
+            await fetch(`${API_URL}/register-rollback`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+            throw cognitoErr;
+          }
+        }
+
         setStage("verify");
         alert("A verification code has been sent to your email.");
         return;
@@ -142,7 +160,18 @@ function Login() {
           email: data.email,
           userId: data.userId,
         });
-        navigate("/");
+
+        //Scale out the login box before navigating to home
+        const el = document.querySelector('.login-box') as HTMLElement | null;
+        if (el) {
+          el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+          el.style.opacity = '0';
+          el.style.transform = 'scale(0.92)';
+        }
+        //Wait for animation to finish before navigating
+        setTimeout(() => {
+          navigate('/', { state: { fromLogin: true } });
+        }, 400);
       } else {
         alert(data.message || "Incorrect email or password");
       }
