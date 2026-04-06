@@ -186,6 +186,20 @@ function Login() {
   //TEXT BOXES, BUTTONS, DIVS, AND++ SECTION 
   return (
     <div className="login-container">
+
+      {/* Video background */}
+      <video
+        className="bg-video"
+        autoPlay
+        loop
+        muted
+        playsInline
+        src="/bg.mp4"
+        controls={false}
+        disablePictureInPicture
+        controlsList="nodownload nofullscreen noremoteplayback"
+      />
+      
       <div className="login-box">
         <h2>
           {stage === "login" && "Login"}
