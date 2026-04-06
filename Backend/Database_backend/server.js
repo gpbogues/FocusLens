@@ -3,7 +3,17 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import cors from "cors";
 import pkg from "aws-sdk";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { v4 as uuid } from "uuid";
 const { CognitoIdentityServiceProvider, config: awsConfig } = pkg;
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+  },
+});
 
 //AWS credentials, add these to your .env file if they're not there already
 awsConfig.update({
@@ -94,6 +104,45 @@ async function deleteCognitoUserByEmail(email) {
 //Used for testing if backend server is online
 app.get("/", (req, res) => {
   res.send("Backend server is running");
+});
+
+router.post('/user/avatar/presigned-url', requireAuth, async (req, res) => {
+  try {
+    const { userId, fileType } = req.body;
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(fileType)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    const ext = fileType.split('/')[1];
+    const key = `avatars/${userId}/${uuid()}.${ext}`;
+
+    const command = new PutObjectCommand({
+      Bucket: process.env.S3_AVATAR_BUCKET,
+      Key: key,
+      ContentType: fileType,
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
+    const publicUrl = `https://${process.env.S3_AVATAR_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
+    res.json({ uploadUrl, publicUrl });
+  } catch (err) {
+    console.error('Presigned URL error:', err);
+    res.status(500).json({ error: 'Failed to generate upload URL' });
+  }
+});
+
+router.put('/user/avatar', requireAuth, async (req, res) => {
+  try {
+    const { userId, avatarUrl } = req.body;
+    await db.query('UPDATE UserData SET avatarUrl = ? WHERE UserID = ?', [avatarUrl, userId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Avatar update error:', err);
+    res.status(500).json({ error: 'Failed to save avatar' });
+  }
 });
 
 //UserSession API, saves user info into db after ending session 
