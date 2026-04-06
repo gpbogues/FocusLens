@@ -25,7 +25,7 @@
   --color-danger-hover: #dc2626;
 }
 
-body.light-mode {
+[data-theme="light"] {
   --color-bg-deep: #e5e7eb;
   --color-bg-surface: #ffffff;
   --color-bg-elevated: #f9fafb;

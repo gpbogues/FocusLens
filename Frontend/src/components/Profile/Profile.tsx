@@ -227,7 +227,7 @@ const Profile = () => {
           <p className="settings-group-label">Appearance</p>
           <div className="settings-row">
             <div className="settings-row-info">
-              <span className="settings-row-title">Dark Mode</span>
+              <span className="settings-row-title">{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
               <span className="settings-row-desc">Toggle between dark and light theme</span>
             </div>
             <label className="toggle-switch">
