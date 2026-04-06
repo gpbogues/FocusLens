@@ -6,10 +6,10 @@ To run:
 
 Login:
     needed info are within .env file of backend -> database_backend folder
-    Server = DB_HOST (from .env)
+    Server = DB_HOST
     Username = viewer
     Password = viewerPassword
-    Database = DB_NAME (from .env)
+    Database = DB_NAME
 
 Also try to only interact with the left side buttons, such as 'select' and table names like 'UserData',
 I made this as a table viewer and tried to restrict functionality,
