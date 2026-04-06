@@ -102,42 +102,6 @@ app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
-// POST /user/avatar/presigned-url
-app.post('/user/avatar/presigned-url', async (req, res) => {
-  const { userId, fileType } = req.body;
-
-  const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-  if (!allowed.includes(fileType)) {
-    return res.status(400).json({ error: 'Invalid file type' });
-  }
-
-  const ext = fileType.split('/')[1];
-  const key = `avatars/${userId}/${uuid()}.${ext}`;
-
-  const command = new PutObjectCommand({
-    Bucket: process.env.S3_AVATAR_BUCKET,
-    Key: key,
-    ContentType: fileType,
-  });
-
-  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
-  const publicUrl = `https://${process.env.S3_AVATAR_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-
-  res.json({ uploadUrl, publicUrl });
-});
-
-// PUT /user/avatar
-app.put('/user/avatar', async (req, res) => {
-  const { userId, avatarUrl } = req.body;
-
-  await db.query(
-    'UPDATE UserData SET avatarUrl = ? WHERE UserID = ?',
-    [avatarUrl, userId]
-  );
-
-  res.json({ success: true });
-});
-
 //UserSession API, saves user info into db after ending session 
 //Note that avgFocus is set to 0, update when data could be fetched for it
 app.post("/session", async (req, res) => {
