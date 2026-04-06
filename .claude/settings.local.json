@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(grep -n \"Home.*Sidebar\\\\|Sidebar\" Frontend/src/components/Home/*.tsx)"
-    ]
-  }
-}
