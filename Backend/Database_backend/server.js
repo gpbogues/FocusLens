@@ -28,15 +28,9 @@ D3 Observe, to graph db values and poten tables, point is to have it run as a se
 without external softwares to be downloaded 
 */
 
+dotenv.config();
 const app = express();
-
-app.use(cors({
-  origin: [
-    'http://localhost:5173'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true,
-}));
+app.use(cors());
 app.use(express.json());
 
 //MySQL pool, injects connection info from .env file to establish connection with RDS instance
