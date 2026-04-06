@@ -350,14 +350,33 @@ app.post("/user/avatar/presigned-url", async (req, res) => {
   }
 });
 
-//Saves the S3 public URL to the user's profile in mysql
+//Saves the S3 public URL to the user's profile in mysql, deletes old S3 object if one exists
 app.put("/user/avatar", async (req, res) => {
   const { userId, avatarUrl } = req.body;
   try {
+    //Fetch old avatar URL before overwriting
+    const [rows] = await db.execute(
+      "SELECT avatarUrl FROM UserData WHERE UserID = ?",
+      [userId]
+    );
+    const oldUrl = rows[0]?.avatarUrl;
+
+    //Update DB with new URL
     await db.execute(
       "UPDATE UserData SET avatarUrl = ? WHERE UserID = ?",
       [avatarUrl, userId]
     );
+
+    //Delete old S3 object if it exists and is in our bucket
+    if (oldUrl && oldUrl.includes(process.env.S3_AVATAR_BUCKET)) {
+      const oldKey = new URL(oldUrl).pathname.slice(1); // strip leading "/"
+      await s3.deleteObject({
+        Bucket: process.env.S3_AVATAR_BUCKET,
+        Key: oldKey,
+      }).promise();
+      console.log(`server.js: Deleted old avatar from S3: ${oldKey}`);
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
