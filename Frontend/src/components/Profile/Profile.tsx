@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { cognitoSignUp, cognitoConfirmSignUp, cognitoResendCode } from '../Login/cognitoAuth';
+import AvatarEditor from './AvatarEditor';
 import './Profile.css';
 
 const AVATAR_PRESETS = [
@@ -15,6 +16,9 @@ const AVATAR_PRESETS = [
   { id: 'alien',  emoji: '👾', bg: '#a855f7' },
 ];
 
+const CUSTOM_AVATAR_ID = '__custom__';
+const MAX_FILE_SIZE_MB = 5;
+
 const Profile = () => {
   const { user, updateUser } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
@@ -26,16 +30,123 @@ const Profile = () => {
   } = useSettings();
 
   const selectedAvatar = AVATAR_PRESETS.find(a => a.id === avatarId) ?? AVATAR_PRESETS[0];
+  const isCustomSelected = avatarId === CUSTOM_AVATAR_ID;
 
-  // ── Account section state ──
+  //Custom avatar state
+  const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [editorFile, setEditorFile] = useState<File | null>(null);
+  const [avatarMenu, setAvatarMenu] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user?.avatarUrl && avatarId !== CUSTOM_AVATAR_ID) {
+      setAvatarId(CUSTOM_AVATAR_ID);
+    }
+  }, []);
+
+  const handleUploadClick = () => {
+    setUploadError('');
+    if (customAvatarUrl) {
+      setAvatarMenu(prev => !prev);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarMenu(false);
+    setUploadLoading(true);
+    try {
+      await fetch(`${API_URL}/user/avatar`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId }),
+      });
+      setCustomAvatarUrl(null);
+      setAvatarId(AVATAR_PRESETS[0].id);
+      updateUser({ avatarUrl: null });
+    } catch {
+      setUploadError('Failed to remove avatar');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      setUploadError(`Image must be under ${MAX_FILE_SIZE_MB}MB`);
+      return;
+    }
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setUploadError('Only JPEG, PNG, or WebP images are allowed');
+      return;
+    }
+
+    setUploadError('');
+    setEditorFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleEditorApply = async (blob: Blob) => {
+    setEditorFile(null);
+    setUploadLoading(true);
+    setUploadError('');
+
+    try {
+      //Request presigned URL from backend
+      const res = await fetch(`${API_URL}/user/avatar/presigned-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, fileType: 'image/png' }),
+      });
+
+      if (!res.ok) throw new Error('Failed to get upload URL');
+      const { uploadUrl, publicUrl } = await res.json();
+
+      //Upload cropped blob directly to S3
+      const s3Res = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: { 'Content-Type': 'image/png' },
+      });
+
+      if (!s3Res.ok) throw new Error('Upload to S3 failed');
+
+      //Save the public URL to the user's profile
+      const saveRes = await fetch(`${API_URL}/user/avatar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, avatarUrl: publicUrl }),
+      });
+
+      if (!saveRes.ok) throw new Error('Failed to save avatar URL');
+
+      setCustomAvatarUrl(publicUrl);
+      setAvatarId(CUSTOM_AVATAR_ID);
+      updateUser({ avatarUrl: publicUrl });
+    } catch (err: any) {
+      setUploadError(err.message || 'Upload failed');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  //Account section state 
   const [revealEmail, setRevealEmail] = useState(false);
   const [modal, setModal] = useState<'username' | 'email' | 'email-verify' | 'password' | null>(null);
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [emailVerifyCode, setEmailVerifyCode] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPasswordFocused, setNewPasswordFocused] = useState(false);
   const [modalError, setModalError] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
 
@@ -47,9 +158,9 @@ const Profile = () => {
     setNewUsername('');
     setNewEmail('');
     setEmailVerifyCode('');
-    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setNewPasswordFocused(false);
   };
 
   const closeModal = () => {
@@ -124,7 +235,7 @@ const Profile = () => {
   const allRequirementsMet = passwordRequirements.every(r => r.met);
 
   const handlePasswordUpdate = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       setModalError('All fields are required'); return;
     }
     if (newPassword !== confirmPassword) { setModalError('New passwords do not match'); return; }
@@ -134,7 +245,7 @@ const Profile = () => {
       const res = await fetch(`${API_URL}/user/password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.userId, currentPassword, newPassword }),
+        body: JSON.stringify({ userId: user?.userId, newPassword }),
       });
       const data = await res.json();
       if (data.success) closeModal();
@@ -144,6 +255,7 @@ const Profile = () => {
   };
 
   return (
+    <>
     <div className="profile-page">
       <h2 className="page-heading">Profile</h2>
 
@@ -151,9 +263,15 @@ const Profile = () => {
       <section className="profile-card">
         <div
           className="profile-avatar-display"
-          style={{ backgroundColor: selectedAvatar.bg }}
+          style={isCustomSelected && customAvatarUrl
+            ? { backgroundColor: 'transparent' }
+            : { backgroundColor: selectedAvatar.bg }
+          }
         >
-          <span className="profile-avatar-emoji">{selectedAvatar.emoji}</span>
+          {isCustomSelected && customAvatarUrl
+            ? <img src={customAvatarUrl} alt="Custom avatar" className="profile-avatar-custom-img" />
+            : <span className="profile-avatar-emoji">{selectedAvatar.emoji}</span>
+          }
         </div>
         <div className="profile-info">
           <p className="account-name">{user ? user.username : 'Guest'}</p>
@@ -176,7 +294,53 @@ const Profile = () => {
               <span className="avatar-option-emoji">{avatar.emoji}</span>
             </button>
           ))}
+
+          {/* Custom upload circle */}
+          <div className="avatar-upload-wrap">
+            <button
+              className={`avatar-upload-btn ${isCustomSelected ? 'avatar-selected' : ''}`}
+              onClick={handleUploadClick}
+              aria-label="Upload custom avatar"
+              disabled={uploadLoading}
+              title="Upload your own photo"
+            >
+              {uploadLoading ? (
+                <span className="avatar-upload-spinner" />
+              ) : customAvatarUrl ? (
+                <img src={customAvatarUrl} alt="Custom" className="avatar-upload-preview-img" />
+              ) : (
+                <span className="avatar-upload-plus">+</span>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+            {avatarMenu && (
+              <>
+                <div className="avatar-menu-backdrop" onClick={() => setAvatarMenu(false)} />
+                <div className="avatar-menu">
+                  <button className="avatar-menu-item" onClick={() => { setAvatarMenu(false); fileInputRef.current?.click(); }}>
+                    Change Picture
+                  </button>
+                  <button className="avatar-menu-item" onClick={() => { setAvatarMenu(false); setAvatarId(CUSTOM_AVATAR_ID); }}>
+                    Use Picture
+                  </button>
+                  <button className="avatar-menu-item avatar-menu-item--danger" onClick={handleRemoveAvatar}>
+                    Remove Picture
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
+
+        {uploadError && (
+          <p className="avatar-upload-error">{uploadError}</p>
+        )}
       </section>
 
       {/* Account info */}
@@ -210,10 +374,7 @@ const Profile = () => {
 
           {/* Password row */}
           <div className="settings-row account-row">
-            <div className="settings-row-info">
-              <span className="settings-row-desc">Password</span>
-              <span className="settings-row-title">••••••••</span>
-            </div>
+            <span className="settings-row-desc">Password</span>
             <button className="account-edit-btn" onClick={() => openModal('password')}>Edit</button>
           </div>
         </div>
@@ -361,18 +522,13 @@ const Profile = () => {
             <input
               className="modal-input"
               type="password"
-              placeholder="Current password"
-              value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)}
-            />
-            <input
-              className="modal-input"
-              type="password"
               placeholder="New password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
+              onFocus={() => setNewPasswordFocused(true)}
+              onBlur={() => setNewPasswordFocused(false)}
             />
-            {newPassword.length > 0 && (
+            {newPasswordFocused && (
               <ul className="modal-requirements">
                 {passwordRequirements.map(r => (
                   <li key={r.label} className={r.met ? 'req-met' : 'req-unmet'}>
@@ -400,6 +556,15 @@ const Profile = () => {
       )}
 
     </div>
+
+    {editorFile && (
+      <AvatarEditor
+        file={editorFile}
+        onApply={handleEditorApply}
+        onCancel={() => setEditorFile(null)}
+      />
+    )}
+    </>
   );
 };
 

@@ -169,6 +169,7 @@ function Login() {
           username: data.username,
           email: data.email,
           userId: data.userId,
+          avatarUrl: data.avatarUrl ?? null,
         });
 
         //Scale out the login box before navigating to home
