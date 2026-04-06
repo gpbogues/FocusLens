@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import cors from "cors";
 import pkg from "aws-sdk";
-const { CognitoIdentityServiceProvider, config: awsConfig } = pkg;
+const { CognitoIdentityServiceProvider, S3, config: awsConfig } = pkg;
 
 //AWS credentials, add these to your .env file if they're not there already
 awsConfig.update({
@@ -44,6 +44,13 @@ const db = mysql.createPool({
 
 //Cognito client instance, injects connection info from .env file to connect with AWS Cognito
 const cognito = new CognitoIdentityServiceProvider({ region: "us-east-1" });
+
+//S3 client using dedicated S3 IAM credentials for avatar uploads
+const s3 = new S3({
+  accessKeyId: process.env.S3_ACCESS_KEY_ID,
+  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
 const USER_POOL_ID = process.env.USER_POOL_ID;
 
 //Looks up real cognito username via email filter before deleting,
@@ -81,9 +88,10 @@ async function deleteCognitoUserByEmail(email) {
     await conn.execute(`
       ALTER TABLE UserData
         ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ADD COLUMN IF NOT EXISTS created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS avatarUrl VARCHAR(500) NULL DEFAULT NULL
     `);
-    console.log("UserData table ready with verified and created_at columns");
+    console.log("UserData table ready with verified, created_at, and avatarUrl columns");
 
     conn.release();
   } catch (err) {
@@ -179,10 +187,11 @@ app.post("/login", async (req, res) => {
     }
     //note that since user info are unique, rows[0] is the only row,
     //and it represents said users info 
-    res.json({ success: true, 
+    res.json({ success: true,
                username: rows[0].uName,
-               email: rows[0].uEmail, 
-               userId: rows[0].UserID });
+               email: rows[0].uEmail,
+               userId: rows[0].UserID,
+               avatarUrl: rows[0].avatarUrl ?? null });
   } else {
     res.json({ success: false, message: "server.js: Invalid email or password" });
   }
@@ -317,6 +326,61 @@ app.post("/delete-cognito-user", async (req, res) => {
   } catch (err) {
     console.error("server.js: delete-cognito-user error:", err);
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+//Generates a presigned S3 PUT URL so the frontend can upload directly to S3
+app.post("/user/avatar/presigned-url", async (req, res) => {
+  const { userId, fileType } = req.body;
+  const ext = fileType.split("/")[1];
+  const key = `avatars/${userId}-${Date.now()}.${ext}`;
+  const params = {
+    Bucket: process.env.S3_AVATAR_BUCKET,
+    Key: key,
+    ContentType: fileType,
+    Expires: 60,
+  };
+  try {
+    const uploadUrl = await s3.getSignedUrlPromise("putObject", params);
+    const publicUrl = `https://${process.env.S3_AVATAR_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    res.json({ uploadUrl, publicUrl });
+  } catch (err) {
+    console.error("server.js: presigned URL error:", err);
+    res.status(500).json({ success: false, message: "Failed to generate upload URL" });
+  }
+});
+
+//Saves the S3 public URL to the user's profile in mysql, deletes old S3 object if one exists
+app.put("/user/avatar", async (req, res) => {
+  const { userId, avatarUrl } = req.body;
+  try {
+    //Fetch old avatar URL before overwriting
+    const [rows] = await db.execute(
+      "SELECT avatarUrl FROM UserData WHERE UserID = ?",
+      [userId]
+    );
+    const oldUrl = rows[0]?.avatarUrl;
+
+    //Update DB with new URL
+    await db.execute(
+      "UPDATE UserData SET avatarUrl = ? WHERE UserID = ?",
+      [avatarUrl, userId]
+    );
+
+    //Delete old S3 object if it exists and is in our bucket
+    if (oldUrl && oldUrl.includes(process.env.S3_AVATAR_BUCKET)) {
+      const oldKey = new URL(oldUrl).pathname.slice(1); // strip leading "/"
+      await s3.deleteObject({
+        Bucket: process.env.S3_AVATAR_BUCKET,
+        Key: oldKey,
+      }).promise();
+      console.log(`server.js: Deleted old avatar from S3: ${oldKey}`);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to save avatar URL" });
   }
 });
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { cognitoSignUp, cognitoConfirmSignUp, cognitoResendCode } from '../Login/cognitoAuth';
@@ -15,6 +15,9 @@ const AVATAR_PRESETS = [
   { id: 'alien',  emoji: '👾', bg: '#a855f7' },
 ];
 
+const CUSTOM_AVATAR_ID = '__custom__';
+const MAX_FILE_SIZE_MB = 5;
+
 const Profile = () => {
   const { user, updateUser } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
@@ -26,6 +29,83 @@ const Profile = () => {
   } = useSettings();
 
   const selectedAvatar = AVATAR_PRESETS.find(a => a.id === avatarId) ?? AVATAR_PRESETS[0];
+  const isCustomSelected = avatarId === CUSTOM_AVATAR_ID;
+
+  // ── Custom avatar state ──
+  const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user?.avatarUrl && avatarId !== CUSTOM_AVATAR_ID) {
+      setAvatarId(CUSTOM_AVATAR_ID);
+    }
+  }, []);
+
+  const handleUploadClick = () => {
+    setUploadError('');
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      setUploadError(`Image must be under ${MAX_FILE_SIZE_MB}MB`);
+      return;
+    }
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setUploadError('Only JPEG, PNG, or WebP images are allowed');
+      return;
+    }
+
+    setUploadLoading(true);
+    setUploadError('');
+
+    try {
+      // 1. Request presigned URL from your backend
+      const res = await fetch(`${API_URL}/user/avatar/presigned-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, fileType: file.type }),
+      });
+
+      if (!res.ok) throw new Error('Failed to get upload URL');
+      const { uploadUrl, publicUrl } = await res.json();
+
+      // 2. Upload directly to S3
+      const s3Res = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      if (!s3Res.ok) throw new Error('Upload to S3 failed');
+
+      // 3. Save the public URL to the user's profile
+      const saveRes = await fetch(`${API_URL}/user/avatar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, avatarUrl: publicUrl }),
+      });
+
+      if (!saveRes.ok) throw new Error('Failed to save avatar URL');
+
+      setCustomAvatarUrl(publicUrl);
+      setAvatarId(CUSTOM_AVATAR_ID);
+      updateUser({ avatarUrl: publicUrl });
+    } catch (err: any) {
+      setUploadError(err.message || 'Upload failed');
+    } finally {
+      setUploadLoading(false);
+      // Reset input so the same file can be re-selected if needed
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   // ── Account section state ──
   const [revealEmail, setRevealEmail] = useState(false);
@@ -151,9 +231,15 @@ const Profile = () => {
       <section className="profile-card">
         <div
           className="profile-avatar-display"
-          style={{ backgroundColor: selectedAvatar.bg }}
+          style={isCustomSelected && customAvatarUrl
+            ? { backgroundColor: 'transparent' }
+            : { backgroundColor: selectedAvatar.bg }
+          }
         >
-          <span className="profile-avatar-emoji">{selectedAvatar.emoji}</span>
+          {isCustomSelected && customAvatarUrl
+            ? <img src={customAvatarUrl} alt="Custom avatar" className="profile-avatar-custom-img" />
+            : <span className="profile-avatar-emoji">{selectedAvatar.emoji}</span>
+          }
         </div>
         <div className="profile-info">
           <p className="account-name">{user ? user.username : 'Guest'}</p>
@@ -176,7 +262,37 @@ const Profile = () => {
               <span className="avatar-option-emoji">{avatar.emoji}</span>
             </button>
           ))}
+
+          {/* Custom upload circle */}
+          <div className="avatar-upload-wrap">
+            <button
+              className={`avatar-upload-btn ${isCustomSelected ? 'avatar-selected' : ''}`}
+              onClick={handleUploadClick}
+              aria-label="Upload custom avatar"
+              disabled={uploadLoading}
+              title="Upload your own photo"
+            >
+              {uploadLoading ? (
+                <span className="avatar-upload-spinner" />
+              ) : isCustomSelected && customAvatarUrl ? (
+                <img src={customAvatarUrl} alt="Custom" className="avatar-upload-preview-img" />
+              ) : (
+                <span className="avatar-upload-plus">+</span>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+          </div>
         </div>
+
+        {uploadError && (
+          <p className="avatar-upload-error">{uploadError}</p>
+        )}
       </section>
 
       {/* Account info */}
