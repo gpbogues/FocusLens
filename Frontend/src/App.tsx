@@ -7,6 +7,7 @@ import Home from './components/Home/Home'
 import Profile from './components/Profile/Profile'
 import Metrics from './components/Metrics/Metrics'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { SettingsProvider } from './context/SettingsContext'
 
 //Redirects to /login if user is not authenticated (based off of user object in AuthContext)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
