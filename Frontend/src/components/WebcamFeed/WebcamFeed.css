@@ -7,7 +7,7 @@
   width: 100%;
   max-width: 100%;
   aspect-ratio: 4 / 3;
-  background-color: #0a0a0a;
+  background-color: var(--bg-secondary);
   border-radius: 12px;
   overflow: hidden;
   display: flex;
@@ -24,13 +24,13 @@
 .placeholder {
   width: 100%;
   aspect-ratio: 4 / 3;
-  background-color: #0a0a0a;
-  border: 2px dashed #404040;
+  background-color: var(--bg-secondary);
+  border: 2px dashed var(--border-color);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #888;
+  color: var(--text-secondary);
   text-align: center;
   padding: 20px;
 }

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useState, useEffect } from 'react';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -12,10 +13,38 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  //Light/dark mode toggle, defaults to dark
+  //Reads from localStorage for user preference
+  const [isDark, setIsDark] = useState(() => {
+    const stored = localStorage.getItem('theme');
+    return stored ? stored === 'dark' : true;
+  });
+
+  //Apply theme on login and on change, saves preference to localStorage
+  useEffect(() => {
+    const theme = isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);  //saves preference
+  }, [isDark]);
+
   const handleLogout = () => {
     logout();
     onClose();
-    navigate('/login');
+    //Scale out the layout before changing to login
+    const el = document.querySelector('.layout-container') as HTMLElement | null;
+    if (el) {
+      el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'scale(0.92)';
+    }
+    //Wait for animation to finish before switching forms 
+    setTimeout(() => {
+      if (el) {
+        el.style.opacity = '';
+        el.style.transform = '';
+      }
+      navigate('/login');
+    }, 400);
   };
 
   return (
@@ -32,23 +61,27 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             </Link>
           </div>
           <div className="sidebar-bottom">
-            {/* Ternary operation of checking if user is logged in */}
-            {user ? (
-              //User logged in, only show log out button
+            {/* Light/dark mode toggle */}
+            <div className="theme-toggle">
+              <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={!isDark}
+                  onChange={() => setIsDark(prev => !prev)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+
+            {/* Only show Log Out button when user is logged in
+                Note: since login form is presented at the start,
+                no need for login/register buttons, as users will never 
+                see them anyways */}
+            {user && (
               <button className="sidebar-btn sidebar-btn-signin" onClick={handleLogout}>
                 Log Out
               </button>
-            ) : (
-              //User not logged in, show sign in AND sign up buttons
-              <>
-                <Link to="/login" className="sidebar-btn sidebar-btn-signin" onClick={onClose}>
-                  Sign In
-                </Link>
-                {/* Changed so that sign up will bring up registration form instead of login */}
-                <Link to="/login" state={{ stage: 'register' }} className="sidebar-btn sidebar-btn-signup" onClick={onClose}>
-                  Sign Up
-                </Link>
-              </>
             )}
           </div>
         </nav>

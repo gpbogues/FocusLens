@@ -18,8 +18,8 @@
 }
 
 .placeholder-card {
-  background-color: #0a0a0a;
-  border: 2px dashed #404040;
+  background-color: var(--bg-secondary);
+  border: 2px dashed var(--border-color);
   border-radius: 12px;
   padding: 40px;
   max-width: 600px;
@@ -27,14 +27,14 @@
 }
 
 .placeholder-text {
-  color: rgba(255, 255, 255, 0.87);
+  color: var(--text-primary);
   font-size: 16px;
   margin: 0 0 12px 0;
   line-height: 1.5;
 }
 
 .placeholder-subtext {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 14px;
   margin: 0;
   line-height: 1.5;

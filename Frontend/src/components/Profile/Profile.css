@@ -3,32 +3,235 @@
   height: 100%;
 }
 
-.profile-content {
+/* Banner placeholder for future profile banner */
+.profile-banner {
+  width: 100%;
+  height: 120px;
+  background-color: var(--border-color);
+}
+
+.profile-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  gap: 20px;
+  gap: 16px;
+  padding: 0 24px;
+  margin-top: -30px;
+  margin-bottom: 24px;
 }
 
 .profile-picture-placeholder {
-  width: 120px;
-  height: 120px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background-color: #404040;
-  border: 3px solid #888;
+  background-color: var(--border-color);
+  border: 3px solid var(--bg-primary);
+  flex-shrink: 0;
 }
 
-.account-name {
-  font-size: 24px;
+.profile-username {
+  font-size: 20px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.87);
+  color: var(--text-primary);
+  margin: 20px 0 0 0;
+}
+
+.edit-profile-btn {
+  margin-left: auto;
+  margin-top: 20px;
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.edit-profile-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+/* Info card */
+.profile-card {
+  margin: 0 24px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 8px 0;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.profile-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-divider {
+  border-top: 1px solid var(--border-color);
+  margin: 0 24px;
+}
+
+.reveal-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.reveal-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+.edit-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid #646cff;
+  background-color: transparent;
+  color: #646cff;
+  cursor: pointer;
+}
+
+.edit-btn:hover {
+  background-color: #646cff22;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
   margin: 0;
 }
 
-.account-email {
+.modal-input {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.45);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+.modal-error {
+  font-size: 12px;
+  color: #ef4444;
   margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modal-cancel {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.modal-cancel:hover {
+  background-color: var(--hover-bg);
+}
+
+.modal-save {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: none;
+  background: #646cff;
+  color: white;
+  cursor: pointer;
+}
+
+.modal-save:hover {
+  background: #535bf2;
+}
+
+.modal-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.modal-resend {
+  font-size: 12px;
+  color: #646cff;
+  cursor: pointer;
+  margin: 0;
+}
+
+.modal-resend:hover {
+  text-decoration: underline;
 }
