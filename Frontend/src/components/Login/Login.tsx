@@ -8,6 +8,16 @@ import {
   cognitoResendCode,
 } from "./cognitoAuth";
 
+/* 
+Bug:
+happened once but upon start of web app,
+login/register page and logout are gone,
+user profile also contained no info,
+
+fix was to load a seperate branch that didn't contain most recent login changes,
+this could be related to local/session storage, and clearing that out
+*/
+
 //NOTE: 
 //this got reverted to the state prior to logout button implementation,
 //as login/register sidebar buttons are removed with login form being independent and presented at the start 
