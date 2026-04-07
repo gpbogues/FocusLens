@@ -43,7 +43,8 @@ const Profile = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (user?.avatarUrl && avatarId !== CUSTOM_AVATAR_ID) {
+    const savedAvatarId = localStorage.getItem(`user_${user?.userId}_avatarId`);
+    if (user?.avatarUrl && !savedAvatarId) {
       setAvatarId(CUSTOM_AVATAR_ID);
     }
   }, []);
