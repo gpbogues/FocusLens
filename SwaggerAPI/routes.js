@@ -33,18 +33,21 @@
 
 /**
  * @swagger
- * /session:
+ * /session/start:
  *   post:
  *     tags: [Backend]
- *     summary: Insert a user session
- *     description: Records a completed session into the UserSession table in RDS. Called from RightSidebar.tsx when the user clicks Stop Session.
+ *     summary: Start a new session
+ *     description: >
+ *       Creates a new row in UserSession at the moment the user starts a session.
+ *       Returns the generated sessionId so subsequent chunk and end calls can be linked to it.
+ *       Called from the frontend when the user clicks Start Session.
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [userId, sessionStart, sessionEnd]
+ *             required: [userId, sessionStart]
  *             properties:
  *               userId:
  *                 type: integer
@@ -54,13 +57,9 @@
  *                 type: string
  *                 description: Session start timestamp in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
  *                 example: 2026-04-02 11:17:39
- *               sessionEnd:
- *                 type: string
- *                 description: Session end timestamp in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
- *                 example: 2026-04-02 11:17:41
  *     responses:
  *       200:
- *         description: Session inserted successfully
+ *         description: Session created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -69,8 +68,11 @@
  *                 success:
  *                   type: boolean
  *                   example: true
+ *                 sessionId:
+ *                   type: integer
+ *                   example: 42
  *       500:
- *         description: Session insert error
+ *         description: Session start error
  *         content:
  *           application/json:
  *             schema:
@@ -81,7 +83,120 @@
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Session insert error
+ *                   example: Session start error
+ */
+
+/**
+ * @swagger
+ * /session/chunk:
+ *   post:
+ *     tags: [Backend]
+ *     summary: Save a 5-minute focus chunk
+ *     description: >
+ *       Inserts a single focus chunk into the SessionChunk table, linked to an active session.
+ *       Called from dmb.py every 5 minutes with the computed chunkStatus for that interval.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId, userId, chunkStatus]
+ *             properties:
+ *               sessionId:
+ *                 type: integer
+ *                 description: FK reference to UserSession.SessionID returned by /session/start
+ *                 example: 42
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               chunkStatus:
+ *                 type: string
+ *                 description: Focus classification for this chunk (VF, SF, SU, VU)
+ *                 enum: [VF, SF, SU, VU]
+ *                 example: SF
+ *     responses:
+ *       200:
+ *         description: Chunk saved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Chunk insert error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Chunk insert error
+ */
+
+/**
+ * @swagger
+ * /session/{sessionId}/end:
+ *   patch:
+ *     tags: [Backend]
+ *     summary: Finalize a session
+ *     description: >
+ *       Sets sessionEnd and computes avgFocus from all saved chunks for the given session.
+ *       avgFocus is calculated by mapping chunkStatus to numeric scores (VF=3, SF=2, SU=1, VU=0),
+ *       averaging them, and rounding to 2 decimal places.
+ *       Called when the user clicks Stop Session.
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           example: 42
+ *         description: FK reference to UserSession.SessionID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionEnd]
+ *             properties:
+ *               sessionEnd:
+ *                 type: string
+ *                 description: Session end timestamp in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+ *                 example: 2026-04-02 12:03:15
+ *     responses:
+ *       200:
+ *         description: Session finalized successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Session end error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Session end error
  */
 
 /**
@@ -272,6 +387,10 @@
  *                 userId:
  *                   type: integer
  *                   example: 1
+ *                 avatarUrl:
+ *                   type: string
+ *                   nullable: true
+ *                   example: https://my-bucket.s3.us-east-1.amazonaws.com/avatars/1-1234567890.png
  *                 message:
  *                   type: string
  *                   example: Please verify your email before logging in.
@@ -521,6 +640,215 @@
  *                 message:
  *                   type: string
  *                   example: Failed to update password
+ */
+
+/**
+ * @swagger
+ * /user/avatar/presigned-url:
+ *   post:
+ *     tags: [Backend]
+ *     summary: Generate a presigned S3 upload URL
+ *     description: >
+ *       Generates a short-lived presigned PUT URL so the frontend can upload an avatar image
+ *       directly to S3 without routing the file through the backend.
+ *       Also returns the final public URL that will be stored in RDS after the upload completes.
+ *       The presigned URL expires in 60 seconds.
+ *       Called from Profile.tsx before the file upload begins.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, fileType]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID, used to name the S3 key
+ *                 example: 1
+ *               fileType:
+ *                 type: string
+ *                 description: MIME type of the image file (e.g. image/png, image/jpeg)
+ *                 example: image/png
+ *     responses:
+ *       200:
+ *         description: Presigned URL generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 uploadUrl:
+ *                   type: string
+ *                   description: Presigned S3 PUT URL (expires in 60s)
+ *                   example: https://my-bucket.s3.amazonaws.com/avatars/1-1234567890.png?X-Amz-Signature=...
+ *                 publicUrl:
+ *                   type: string
+ *                   description: Final public URL to store in RDS after upload
+ *                   example: https://my-bucket.s3.us-east-1.amazonaws.com/avatars/1-1234567890.png
+ *       500:
+ *         description: Failed to generate presigned URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to generate upload URL
+ */
+
+/**
+ * @swagger
+ * /user/avatar:
+ *   put:
+ *     tags: [Backend]
+ *     summary: Save avatar URL to user profile
+ *     description: >
+ *       Saves the public S3 URL to the user's avatarUrl column in RDS after a successful upload.
+ *       If the user already has an avatar, the old S3 object is deleted before the new URL is saved.
+ *       Called from Profile.tsx after the direct-to-S3 PUT upload completes.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, avatarUrl]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               avatarUrl:
+ *                 type: string
+ *                 description: Public S3 URL returned by /user/avatar/presigned-url
+ *                 example: https://my-bucket.s3.us-east-1.amazonaws.com/avatars/1-1234567890.png
+ *     responses:
+ *       200:
+ *         description: Avatar URL saved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Failed to save avatar URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to save avatar URL
+ *   delete:
+ *     tags: [Backend]
+ *     summary: Remove a user's avatar
+ *     description: >
+ *       Sets avatarUrl to NULL in RDS and deletes the corresponding S3 object.
+ *       Called from Profile.tsx when the user clicks Remove Avatar.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Avatar removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Failed to remove avatar
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to remove avatar
+ */
+
+/**
+ * @swagger
+ * /user/account:
+ *   delete:
+ *     tags: [Backend]
+ *     summary: Delete a user account
+ *     description: >
+ *       Permanently deletes the user's row from RDS after verifying their password.
+ *       If the user has an avatar, the S3 object is also deleted before the RDS row is removed.
+ *       Called from Profile.tsx when the user confirms account deletion.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, password]
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: FK reference to UserData.UserID
+ *                 example: 1
+ *               password:
+ *                 type: string
+ *                 description: Current password used to confirm deletion intent
+ *                 example: Password123!
+ *     responses:
+ *       200:
+ *         description: Account deletion result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   description: Present only on failure (user not found or wrong password)
+ *                   example: Incorrect password
+ *       500:
+ *         description: Failed to delete account
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to delete account
  */
 
 /**
