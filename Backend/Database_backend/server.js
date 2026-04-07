@@ -407,6 +407,37 @@ app.delete("/user/avatar", async (req, res) => {
   }
 });
 
+//Deletes user account from RDS and their S3 avatar if one exists
+app.delete("/user/account", async (req, res) => {
+  const { userId, password } = req.body;
+  try {
+    const [rows] = await db.execute(
+      "SELECT avatarUrl, uPassword FROM UserData WHERE UserID = ?",
+      [userId]
+    );
+    if (rows.length === 0) return res.json({ success: false, message: "User not found" });
+    if (rows[0].uPassword !== password) return res.json({ success: false, message: "Incorrect password" });
+
+    const avatarUrl = rows[0]?.avatarUrl;
+
+    if (avatarUrl && avatarUrl.includes(process.env.S3_AVATAR_BUCKET)) {
+      const key = new URL(avatarUrl).pathname.slice(1);
+      await s3.deleteObject({
+        Bucket: process.env.S3_AVATAR_BUCKET,
+        Key: key,
+      }).promise();
+      console.log(`server.js: Deleted avatar from S3 for user ${userId}`);
+    }
+
+    await db.execute("DELETE FROM UserData WHERE UserID = ?", [userId]);
+    console.log(`server.js: Deleted account for user ${userId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to delete account" });
+  }
+});
+
 //Cleanup job, runs every 24 hours
 //Needs more testing to be done, for now keep as is
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; 
