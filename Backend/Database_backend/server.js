@@ -267,6 +267,21 @@ app.put("/user/password", async (req, res) => {
   }
 });
 
+//Resets password by email for forgot-password flow (user not logged in, no userId available)
+app.put("/reset-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+  try {
+    await db.execute(
+      "UPDATE UserData SET uPassword = ? WHERE uEmail = ?",
+      [newPassword, email]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to reset password" });
+  }
+});
+
 //Check if email is already taken in rds before creating a cognito user,
 //prevents phantom users from being created for duplicate emails
 //differs from /user/email in that this is ran in profile.tsx before cognitoSignUp
