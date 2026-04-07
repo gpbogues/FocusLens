@@ -20,8 +20,7 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
  
 app = Flask(__name__)
-CORS(app, origins="*", methods=["GET", "POST", "PATCH", "OPTIONS"],
-     allow_headers=["Content-Type"])
+CORS(app)  # Allows React to communicate with the API
 
 # Node.js backend URL — chunks are POSTed here
 NODE_API_URL = "http://localhost:3000"
@@ -261,7 +260,7 @@ def focus_engine():
  
 #   API Endpoints — call these from frontend
 
-@app.route("/api/session", methods=["POST", "OPTIONS"])
+@app.route("/api/session", methods=["POST"])
 def set_session():
     """
     Called by the frontend when a session starts.
@@ -274,7 +273,7 @@ def set_session():
     return jsonify({"ok": True})
 
 
-@app.route("/api/session/end", methods=["POST", "OPTIONS"])
+@app.route("/api/session/end", methods=["POST"])
 def end_session():
     """
     Called by the frontend when the session stops (including early stop < 5 min).
