@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import './TopBar.css';
@@ -6,16 +6,33 @@ import './TopBar.css';
 const TopBar = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleTitleClick = () => navigate('/');
-  const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
   const closeSidebar = () => setIsSidebarOpen(false);
+
+  const openSidebar = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setIsSidebarOpen(true);
+  };
+
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setIsSidebarOpen(false), 150);
+  };
+
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
 
   return (
     <>
       <header className="top-bar">
         <div className="top-bar-left">
-          <button className="menu-trigger" onClick={toggleSidebar}>
+          <button
+            className="menu-trigger"
+            onMouseEnter={openSidebar}
+            onMouseLeave={scheduleClose}
+          >
             ☰
           </button>
           <button className="home-btn" onClick={handleTitleClick} title="Home">
@@ -29,7 +46,12 @@ const TopBar = () => {
           FocusLens
         </h1>
       </header>
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={closeSidebar}
+        onSidebarMouseEnter={cancelClose}
+        onSidebarMouseLeave={scheduleClose}
+      />
     </>
   );
 };
