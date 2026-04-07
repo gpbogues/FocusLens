@@ -1,5 +1,5 @@
-drop table SessionGraphics;
-drop table SessionTable;
+drop table SessionChunk;
+drop table UserSession;
 drop table UserFriend;
 drop table UserData;
 
@@ -11,14 +11,30 @@ CREATE TABLE UserData
         verified BOOLEAN NOT NULL DEFAULT FALSE,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
-    
 
-//this is still work in progress, things like API calls still need to be added,
-//also need to faciliate transaction between two users when adding
-//also features like blocking might be considered (right now its not)
-//right now my thoughts are a friend request creates two inserts into friend table
-//to query friends from table to frontend, you would search there status = accepted 
+CREATE TABLE UserSession
+	(	SessionID int auto_increment NOT NULL Primary KEY,
+		UserID int NOT NULL,
+        sessionStart DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        sessionEnd DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        avgFocus double NOT NULL
+    );
+ALTER TABLE UserSession ADD CONSTRAINT UserSession_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
 
+CREATE TABLE SessionChunk
+	(	ChunkId int auto_increment NOT NULL Primary KEY,
+		SessionID int NOT NULL,
+        UserID int NOT NULL,
+        endOfChunk DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        chunkStatus enum ('VF', 'SF' ,'VU', 'SU')
+	);
+ALTER TABLE SessionChunk ADD CONSTRAINT SessionChunk_SessionIDfk FOREIGN KEY (SessionID) REFERENCES UserSession (SessionID) ON DELETE CASCADE;
+ALTER TABLE SessionChunk ADD CONSTRAINT SessionChunk_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
+
+select * from UserData;
+select * from UserSession;
+
+/*
 CREATE TABLE UserFriend 
 	(	FriendPairID int auto_increment NOT NULL PRIMARY KEY,
 		UserID int NOT NULL UNIQUE,
@@ -28,22 +44,4 @@ CREATE TABLE UserFriend
 	);
 ALTER TABLE UserFriend ADD CONSTRAINT UserFriend_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
 ALTER TABLE UserFriend ADD CONSTRAINT UserFriend_friendIDfk FOREIGN KEY (friendID) REFERENCES UserData (UserID) ON DELETE CASCADE;
-
-CREATE TABLE SessionTable
-	(	SessionID int auto_increment NOT NULL Primary KEY,
-		UserID int NOT NULL,
-        SessionDate Date NOT NULL,
-        SessionLengthTotal int NOT NULL,
-        SessionAvgFocus int NOT NULL
-    );
-ALTER TABLE SessionTable ADD CONSTRAINT SessionTable_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
-
-
-CREATE TABLE SessionGraphics
-	(	SessionGraphicsID int auto_increment NOT NULL Primary KEY,
-		SessionID int NOT NULL,
-        placeHolder int NOT NULL
-	);
-ALTER TABLE SessionGraphics ADD CONSTRAINT SessionGraphics_SessionIDfk FOREIGN KEY (SessionID) REFERENCES SessionTable (SessionID) ON DELETE CASCADE;
-
-select * from UserData;
+*/

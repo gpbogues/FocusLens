@@ -133,3 +133,14 @@ interface AuthContextType {
 3. `WebcamFeed` receives `isActive={true}` and requests camera access.
 4. The live video feed appears in the sidebar.
 5. Clicking **"Stop Session"** flips `isSessionActive` to `false`, stopping and releasing the camera stream.
+
+
+## About frontend -> backend calls
+
+Note: this is frontend side, backend looks different
+  'fetch' is the function thats makes http request to backend,
+  and 'POST' is the method of sending data over to the backend
+
+  Think of 'fetch' as being a tool that makes request,
+  and 'POST' is part of 'fetch' used to send that request.
+
