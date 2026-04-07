@@ -1,7 +1,7 @@
 .right-sidebar {
   width: 320px;
-  background-color: var(--color-bg-deep);
-  border-left: 1px solid var(--color-border);
+  background-color: #0a0a0a;
+  border-left: 1px solid #404040;
   display: flex;
   flex-direction: column;
   padding: 20px;
@@ -25,43 +25,17 @@
 }
 
 .session-button.start {
-  background-color: var(--color-success);
+  background-color: #22c55e;
 }
 
 .session-button.start:hover {
-  opacity: 0.88;
+  background-color: #16a34a;
 }
 
 .session-button.stop {
-  background-color: var(--color-danger);
+  background-color: #ef4444;
 }
 
 .session-button.stop:hover {
-  background-color: var(--color-danger-hover);
-}
-
-.session-info-box {
-  width: 100%;
-  background-color: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  pointer-events: none;
-  user-select: none;
-}
-
-.session-info-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.session-info-value {
-  font-size: 14px;
-  color: var(--color-text-bright);
+  background-color: #dc2626;
 }

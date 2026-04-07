@@ -16,8 +16,3 @@ Dataset/
 # env file that stores database login info
 .env
 env
-
-# Frontend / JavaScript (10 billion node files)
-node_modules/
-dist/
-.eslintcache

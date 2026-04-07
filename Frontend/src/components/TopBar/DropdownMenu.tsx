@@ -34,8 +34,7 @@ const DropdownMenu = ({ isOpen, onClose }: DropdownMenuProps) => {
         Metrics
       </Link>
       
-      {/* Seb- Added login to dropdown menu temp for easy access, can be removed as needed
-          This could prob be removed? */}
+      {/* Seb- Added login to dropdown menu temp for easy access, can be removed as needed */}
       <Link to="/login" className="dropdown-item" onClick={onClose}>
         Login
       </Link>
