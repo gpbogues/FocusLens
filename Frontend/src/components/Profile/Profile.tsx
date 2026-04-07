@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { cognitoSignUp, cognitoConfirmSignUp, cognitoResendCode } from '../Login/cognitoAuth';
@@ -20,7 +21,8 @@ const CUSTOM_AVATAR_ID = '__custom__';
 const MAX_FILE_SIZE_MB = 5;
 
 const Profile = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
   const {
     isDarkMode, setIsDarkMode,
@@ -138,9 +140,12 @@ const Profile = () => {
     }
   };
 
-  //Account section state 
+  //Account section state
   const [revealEmail, setRevealEmail] = useState(false);
-  const [modal, setModal] = useState<'username' | 'email' | 'email-verify' | 'password' | null>(null);
+  const [modal, setModal] = useState<'username' | 'email' | 'email-verify' | 'password' | 'delete-account' | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [emailVerifyCode, setEmailVerifyCode] = useState('');
@@ -223,6 +228,26 @@ const Profile = () => {
     } catch (err: any) {
       setModalError(err.message || 'Invalid verification code');
     } finally { setModalLoading(false); }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) { setDeleteError('Please enter your password'); return; }
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      const res = await fetch(`${API_URL}/user/account`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, password: deletePassword }),
+      });
+      const data = await res.json();
+      if (!data.success) { setDeleteError(data.message || 'Incorrect password'); setDeleteLoading(false); return; }
+      logout();
+      navigate('/login');
+    } catch {
+      setDeleteError('Server error');
+      setDeleteLoading(false);
+    }
   };
 
   const passwordRequirements = [
@@ -555,7 +580,38 @@ const Profile = () => {
         </div>
       )}
 
+      {/* Delete account */}
+      <section className="settings-section">
+        <button className="delete-account-btn" onClick={() => setModal('delete-account')}>
+          Delete Account
+        </button>
+      </section>
+
     </div>
+
+    {/* Delete account confirmation modal */}
+    {modal === 'delete-account' && (
+      <div className="modal-overlay" onClick={() => { setModal(null); setDeletePassword(''); setDeleteError(''); }}>
+        <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <h3 className="modal-title">Delete Account</h3>
+          <p className="modal-subtitle">This will permanently delete your account and all associated data. This cannot be undone.</p>
+          <input
+            className="modal-input"
+            type="password"
+            placeholder="Enter your password to confirm"
+            value={deletePassword}
+            onChange={e => setDeletePassword(e.target.value)}
+          />
+          {deleteError && <p className="modal-error">{deleteError}</p>}
+          <div className="modal-actions">
+            <button className="modal-cancel" onClick={() => { setModal(null); setDeletePassword(''); setDeleteError(''); }}>Cancel</button>
+            <button className="modal-save modal-save--danger" onClick={handleDeleteAccount} disabled={deleteLoading}>
+              {deleteLoading ? 'Deleting...' : 'Delete Account'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {editorFile && (
       <AvatarEditor
