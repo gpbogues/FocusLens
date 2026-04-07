@@ -1,5 +1,6 @@
 import express from "express";
 import mysql from "mysql2/promise";
+import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import cors from "cors";
 import pkg from "aws-sdk";
@@ -139,9 +140,10 @@ app.get("/sessions/:userId", async (req, res) => {
 app.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   try {
+    const hashedPassword = await bcrypt.hash(password, 12);
     await db.execute(
       "INSERT INTO UserData (uEmail, uName, uPassword, verified, created_at) VALUES (?, ?, ?, FALSE, NOW())",
-      [email, username, password]
+      [email, username, hashedPassword]
     );
     res.json({ message: "User registered" });
   } catch (err) {
@@ -174,26 +176,37 @@ app.delete("/register-rollback", async (req, res) => {
 //Login API, only allows verified users to log in
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const [rows] = await db.execute(
-    "SELECT * FROM UserData WHERE uEmail=? AND uPassword=?",
-    [email, password]
-  );
+  try {
+    const [rows] = await db.execute(
+      "SELECT * FROM UserData WHERE uEmail=?",
+      [email]
+    );
 
-  //row>0 means user already exist 
-  if (rows.length > 0) {
+    if (rows.length === 0) {
+      return res.json({ success: false, message: "server.js: Invalid email or password" });
+    }
+
+    const user = rows[0];
+    const passwordMatch = await bcrypt.compare(password, user.uPassword);
+    if (!passwordMatch) {
+      return res.json({ success: false, message: "server.js: Invalid email or password" });
+    }
+
     //Block unverified users from logging in
-    if (!rows[0].verified) {
+    if (!user.verified) {
       return res.json({ success: false, message: "Please verify your email before logging in." });
     }
+
     //note that since user info are unique, rows[0] is the only row,
-    //and it represents said users info 
+    //and it represents said users info
     res.json({ success: true,
-               username: rows[0].uName,
-               email: rows[0].uEmail,
-               userId: rows[0].UserID,
-               avatarUrl: rows[0].avatarUrl ?? null });
-  } else {
-    res.json({ success: false, message: "server.js: Invalid email or password" });
+               username: user.uName,
+               email: user.uEmail,
+               userId: user.UserID,
+               avatarUrl: user.avatarUrl ?? null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "server.js: Login error" });
   }
 });
 
@@ -216,9 +229,10 @@ app.put("/user/username", async (req, res) => {
 app.put("/user/password", async (req, res) => {
   const { userId, newPassword } = req.body;
   try {
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     await db.execute(
       "UPDATE UserData SET uPassword = ? WHERE UserID = ?",
-      [newPassword, userId]
+      [hashedPassword, userId]
     );
     res.json({ success: true });
   } catch (err) {
@@ -231,9 +245,10 @@ app.put("/user/password", async (req, res) => {
 app.put("/reset-password", async (req, res) => {
   const { email, newPassword } = req.body;
   try {
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     await db.execute(
       "UPDATE UserData SET uPassword = ? WHERE uEmail = ?",
-      [newPassword, email]
+      [hashedPassword, email]
     );
     res.json({ success: true });
   } catch (err) {
@@ -431,7 +446,8 @@ app.delete("/user/account", async (req, res) => {
       [userId]
     );
     if (rows.length === 0) return res.json({ success: false, message: "User not found" });
-    if (rows[0].uPassword !== password) return res.json({ success: false, message: "Incorrect password" });
+    const passwordMatch = await bcrypt.compare(password, rows[0].uPassword);
+    if (!passwordMatch) return res.json({ success: false, message: "Incorrect password" });
 
     const avatarUrl = rows[0]?.avatarUrl;
 
