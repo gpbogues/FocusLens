@@ -17,6 +17,10 @@
 .main-content {
   flex: 1;
   overflow-y: auto;
-  background-color: #1a1a1a;
-  padding: 24px;
+  background-color: var(--color-bg-surface);
+  padding: 0;
+}
+
+.animate-in {
+  animation: scaleIn 0.8s ease forwards;
 }
