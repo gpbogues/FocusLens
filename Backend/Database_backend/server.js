@@ -86,12 +86,23 @@ async function deleteCognitoUserByEmail(email) {
 
     //Add verified and created_at columns if they don't already exist 
     //(in case errors, since verified is must have for user form to function)
-    await conn.execute(`
-      ALTER TABLE UserData
-        ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS avatarUrl VARCHAR(500) NULL DEFAULT NULL
-    `);
+     //Add verified, created_at, and avatarUrl columns if they don't already exist
+    //(ADD COLUMN IF NOT EXISTS is not supported on older MySQL versions)
+    const columnsToAdd = [
+      { name: 'verified',   def: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+      { name: 'created_at', def: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP' },
+      { name: 'avatarUrl',  def: 'VARCHAR(500) NULL DEFAULT NULL' },
+    ];
+    for (const col of columnsToAdd) {
+      const [rows] = await conn.execute(
+        `SELECT 1 FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'UserData' AND COLUMN_NAME = ?`,
+        [col.name]
+      );
+      if (rows.length === 0) {
+        await conn.execute(`ALTER TABLE UserData ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
     console.log("UserData table ready with verified, created_at, and avatarUrl columns");
 
     conn.release();
