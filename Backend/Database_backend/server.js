@@ -104,19 +104,59 @@ app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
-//UserSession API, saves user info into db after ending session 
-//Note that avgFocus is set to 0, update when data could be fetched for it
-app.post("/session", async (req, res) => {
-  const { userId, sessionStart, sessionEnd } = req.body;
+//Creates a new session at start time, returns sessionId so chunks can be linked to it
+app.post("/session/start", async (req, res) => {
+  const { userId, sessionStart } = req.body;
+  try {
+    const [result] = await db.execute(
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus) VALUES (?, ?, ?, ?)",
+      [userId, sessionStart, sessionStart, 0]
+    );
+    res.json({ success: true, sessionId: result.insertId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Session start error" });
+  }
+});
+
+//Saves a 5-minute focus chunk from dmb.py into SessionChunk table
+app.post("/session/chunk", async (req, res) => {
+  const { sessionId, userId, chunkStatus } = req.body;
   try {
     await db.execute(
-      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus) VALUES (?, ?, ?, ?)",
-      [userId, sessionStart, sessionEnd, 0]
+      "INSERT INTO SessionChunk (SessionID, UserID, endOfChunk, chunkStatus) VALUES (?, ?, NOW(), ?)",
+      [sessionId, userId, chunkStatus]
     );
     res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Session insert error" });
+    res.status(500).json({ success: false, message: "Chunk insert error" });
+  }
+});
+
+//Finalizes a session: sets sessionEnd and computes avgFocus from all saved chunks
+app.patch("/session/:sessionId/end", async (req, res) => {
+  const { sessionId } = req.params;
+  const { sessionEnd } = req.body;
+  const statusMap = { VF: 3, SF: 2, SU: 1, VU: 0 };
+  try {
+    const [chunks] = await db.execute(
+      "SELECT chunkStatus FROM SessionChunk WHERE SessionID = ?",
+      [sessionId]
+    );
+    let avgFocus = 0;
+    if (chunks.length > 0) {
+      const total = chunks.reduce((sum, row) => sum + (statusMap[row.chunkStatus] ?? 0), 0);
+      avgFocus = Math.round((total / chunks.length) * 100) / 100;
+    }
+    await db.execute(
+      "UPDATE UserSession SET sessionEnd = ?, avgFocus = ? WHERE SessionID = ?",
+      [sessionEnd, avgFocus, sessionId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Session end error" });
   }
 });
 
