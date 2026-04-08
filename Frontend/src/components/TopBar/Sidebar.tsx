@@ -46,6 +46,9 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
             <Link to="/profile" className="sidebar-item" onClick={onClose}>
               Profile
             </Link>
+            <Link to="/sessions" className="sidebar-item" onClick={onClose}>
+              Sessions
+            </Link>
             <Link to="/metrics" className="sidebar-item" onClick={onClose}>
               Metrics
             </Link>
