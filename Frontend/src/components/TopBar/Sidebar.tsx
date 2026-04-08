@@ -5,10 +5,12 @@ import './Sidebar.css';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  onSidebarMouseEnter: () => void;
+  onSidebarMouseLeave: () => void;
 }
 
 //Added for navigating between login/logout states
-const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
+const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: SidebarProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -34,12 +36,18 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
   return (
     <>
-      {isOpen && <div className="sidebar-backdrop" onClick={onClose} />}
-      <div className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+      <div
+        className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}
+        onMouseEnter={onSidebarMouseEnter}
+        onMouseLeave={onSidebarMouseLeave}
+      >
         <nav className="sidebar-nav">
           <div className="sidebar-top">
             <Link to="/profile" className="sidebar-item" onClick={onClose}>
               Profile
+            </Link>
+            <Link to="/sessions" className="sidebar-item" onClick={onClose}>
+              Sessions
             </Link>
             <Link to="/metrics" className="sidebar-item" onClick={onClose}>
               Metrics

@@ -6,6 +6,7 @@ import Layout from './components/Layout/Layout'
 import Home from './components/Home/Home'
 import Profile from './components/Profile/Profile'
 import Metrics from './components/Metrics/Metrics'
+import Sessions from './components/Sessions/Sessions'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SettingsProvider } from './context/SettingsContext'
 
@@ -48,6 +49,7 @@ function AppRoutes() {
         <Route index element={<Home />} />
         <Route path="profile" element={<Profile />} />
         <Route path="metrics" element={<Metrics />} />
+        <Route path="sessions" element={<Sessions />} />
       </Route>
     </Routes>
   )

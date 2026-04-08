@@ -1,5 +1,6 @@
 import express from "express";
 import mysql from "mysql2/promise";
+import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import cors from "cors";
 import pkg from "aws-sdk";
@@ -83,15 +84,40 @@ async function deleteCognitoUserByEmail(email) {
     const conn = await db.getConnection();
     console.log("Connected to RDS MySQL");
 
-    //Add verified and created_at columns if they don't already exist 
-    //(in case errors, since verified is must have for user form to function)
-    await conn.execute(`
-      ALTER TABLE UserData
-        ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS avatarUrl VARCHAR(500) NULL DEFAULT NULL
-    `);
+    //UserData table columns in case they don't exist 
+    const columnsToAdd = [
+      { name: 'verified',   def: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+      { name: 'created_at', def: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP' },
+      { name: 'avatarUrl',  def: 'VARCHAR(500) NULL DEFAULT NULL' },
+    ];
+    for (const col of columnsToAdd) {
+      const [rows] = await conn.execute(
+        `SELECT 1 FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'UserData' AND COLUMN_NAME = ?`,
+        [col.name]
+      );
+      if (rows.length === 0) {
+        await conn.execute(`ALTER TABLE UserData ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
     console.log("UserData table ready with verified, created_at, and avatarUrl columns");
+
+    //UserSession table columns in case they don't exist
+    const sessionColumnsToAdd = [
+      { name: 'sessionName',        def: "VARCHAR(128) NOT NULL DEFAULT ''" },
+      { name: 'sessionDescription', def: "TEXT NULL" },
+    ];
+    for (const col of sessionColumnsToAdd) {
+      const [rows] = await conn.execute(
+        `SELECT 1 FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'UserSession' AND COLUMN_NAME = ?`,
+        [col.name]
+      );
+      if (rows.length === 0) {
+        await conn.execute(`ALTER TABLE UserSession ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
+    console.log("UserSession table ready with sessionName and sessionDescription columns");
 
     conn.release();
   } catch (err) {
@@ -104,59 +130,57 @@ app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
-//Creates a new session at start time, returns sessionId so chunks can be linked to it
-app.post("/session/start", async (req, res) => {
-  const { userId, sessionStart } = req.body;
-  try {
-    const [result] = await db.execute(
-      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus) VALUES (?, ?, ?, ?)",
-      [userId, sessionStart, sessionStart, 0]
-    );
-    res.json({ success: true, sessionId: result.insertId });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Session start error" });
-  }
-});
-
-//Saves a 5-minute focus chunk from dmb.py into SessionChunk table
-app.post("/session/chunk", async (req, res) => {
-  const { sessionId, userId, chunkStatus } = req.body;
+//UserSession API, saves user info into db after ending session
+//Note that avgFocus is set to 0, update when data could be fetched for it
+app.post("/session", async (req, res) => {
+  const { userId, sessionStart, sessionEnd, sessionName, sessionDescription } = req.body;
   try {
     await db.execute(
-      "INSERT INTO SessionChunk (SessionID, UserID, endOfChunk, chunkStatus) VALUES (?, ?, NOW(), ?)",
-      [sessionId, userId, chunkStatus]
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)",
+      [userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription]
     );
     res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Chunk insert error" });
+    res.status(500).json({ success: false, message: "Session insert error" });
   }
 });
 
-//Finalizes a session: sets sessionEnd and computes avgFocus from all saved chunks
-app.patch("/session/:sessionId/end", async (req, res) => {
-  const { sessionId } = req.params;
-  const { sessionEnd } = req.body;
-  const statusMap = { VF: 3, SF: 2, SU: 1, VU: 0 };
+//Fetches all sessions for a user with pagination, sorting, and case-insensitive search
+app.get("/sessions/paginated/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const page    = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit   = Math.max(1, parseInt(req.query.limit) || 5);
+  const offset  = (page - 1) * limit;
+  const search  = req.query.search ? String(req.query.search) : '';
+  const sortDir = req.query.sortDir === 'ASC' ? 'ASC' : 'DESC';
+
+  // Whitelist to prevent SQL injection (column names can't be parameterized)
+  const sortByMap = {
+    date:     'sessionStart',
+    duration: 'TIMESTAMPDIFF(SECOND, sessionStart, sessionEnd)',
+    avgFocus: 'avgFocus',
+  };
+  const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
+
   try {
-    const [chunks] = await db.execute(
-      "SELECT chunkStatus FROM SessionChunk WHERE SessionID = ?",
-      [sessionId]
+    const searchParam = `%${search.toLowerCase()}%`;
+    const [rows] = await db.execute(
+      `SELECT sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus
+       FROM UserSession
+       WHERE UserID = ? AND LOWER(sessionName) LIKE ?
+       ORDER BY ${orderExpr} ${sortDir}
+       LIMIT ? OFFSET ?`,
+      [userId, searchParam, limit, offset]
     );
-    let avgFocus = 0;
-    if (chunks.length > 0) {
-      const total = chunks.reduce((sum, row) => sum + (statusMap[row.chunkStatus] ?? 0), 0);
-      avgFocus = Math.round((total / chunks.length) * 100) / 100;
-    }
-    await db.execute(
-      "UPDATE UserSession SET sessionEnd = ?, avgFocus = ? WHERE SessionID = ?",
-      [sessionEnd, avgFocus, sessionId]
+    const [[{ total }]] = await db.execute(
+      `SELECT COUNT(*) AS total FROM UserSession WHERE UserID = ? AND LOWER(sessionName) LIKE ?`,
+      [userId, searchParam]
     );
-    res.json({ success: true });
+    res.json({ success: true, sessions: rows, total });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Session end error" });
+    res.status(500).json({ success: false, message: "Failed to fetch paginated sessions" });
   }
 });
 
@@ -165,7 +189,7 @@ app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
     const [rows] = await db.execute(
-      "SELECT sessionStart, sessionEnd FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3",
+      "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3",
       [userId]
     );
     res.json({ success: true, sessions: rows });
@@ -179,9 +203,10 @@ app.get("/sessions/:userId", async (req, res) => {
 app.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   try {
+    const hashedPassword = await bcrypt.hash(password, 12);
     await db.execute(
       "INSERT INTO UserData (uEmail, uName, uPassword, verified, created_at) VALUES (?, ?, ?, FALSE, NOW())",
-      [email, username, password]
+      [email, username, hashedPassword]
     );
     res.json({ message: "User registered" });
   } catch (err) {
@@ -214,26 +239,37 @@ app.delete("/register-rollback", async (req, res) => {
 //Login API, only allows verified users to log in
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const [rows] = await db.execute(
-    "SELECT * FROM UserData WHERE uEmail=? AND uPassword=?",
-    [email, password]
-  );
+  try {
+    const [rows] = await db.execute(
+      "SELECT * FROM UserData WHERE uEmail=?",
+      [email]
+    );
 
-  //row>0 means user already exist 
-  if (rows.length > 0) {
+    if (rows.length === 0) {
+      return res.json({ success: false, message: "server.js: Invalid email or password" });
+    }
+
+    const user = rows[0];
+    const passwordMatch = await bcrypt.compare(password, user.uPassword);
+    if (!passwordMatch) {
+      return res.json({ success: false, message: "server.js: Invalid email or password" });
+    }
+
     //Block unverified users from logging in
-    if (!rows[0].verified) {
+    if (!user.verified) {
       return res.json({ success: false, message: "Please verify your email before logging in." });
     }
+
     //note that since user info are unique, rows[0] is the only row,
-    //and it represents said users info 
+    //and it represents said users info
     res.json({ success: true,
-               username: rows[0].uName,
-               email: rows[0].uEmail,
-               userId: rows[0].UserID,
-               avatarUrl: rows[0].avatarUrl ?? null });
-  } else {
-    res.json({ success: false, message: "server.js: Invalid email or password" });
+               username: user.uName,
+               email: user.uEmail,
+               userId: user.UserID,
+               avatarUrl: user.avatarUrl ?? null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "server.js: Login error" });
   }
 });
 
@@ -256,14 +292,31 @@ app.put("/user/username", async (req, res) => {
 app.put("/user/password", async (req, res) => {
   const { userId, newPassword } = req.body;
   try {
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     await db.execute(
       "UPDATE UserData SET uPassword = ? WHERE UserID = ?",
-      [newPassword, userId]
+      [hashedPassword, userId]
     );
     res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to update password" });
+  }
+});
+
+//Resets password by email for forgot-password flow (user not logged in, no userId available)
+app.put("/reset-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await db.execute(
+      "UPDATE UserData SET uPassword = ? WHERE uEmail = ?",
+      [hashedPassword, email]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to reset password" });
   }
 });
 
@@ -456,7 +509,8 @@ app.delete("/user/account", async (req, res) => {
       [userId]
     );
     if (rows.length === 0) return res.json({ success: false, message: "User not found" });
-    if (rows[0].uPassword !== password) return res.json({ success: false, message: "Incorrect password" });
+    const passwordMatch = await bcrypt.compare(password, rows[0].uPassword);
+    if (!passwordMatch) return res.json({ success: false, message: "Incorrect password" });
 
     const avatarUrl = rows[0]?.avatarUrl;
 
