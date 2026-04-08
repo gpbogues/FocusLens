@@ -17,7 +17,9 @@ CREATE TABLE UserSession
 		UserID int NOT NULL,
         sessionStart DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         sessionEnd DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        avgFocus double NOT NULL
+        avgFocus double NOT NULL,
+        sessionName VARCHAR(128) NOT NULL DEFAULT '',
+        sessionDescription TEXT NULL
     );
 ALTER TABLE UserSession ADD CONSTRAINT UserSession_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
 
