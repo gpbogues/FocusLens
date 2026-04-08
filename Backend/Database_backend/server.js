@@ -146,6 +146,44 @@ app.post("/session", async (req, res) => {
   }
 });
 
+//Fetches all sessions for a user with pagination, sorting, and case-insensitive search
+app.get("/sessions/paginated/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const page    = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit   = Math.max(1, parseInt(req.query.limit) || 5);
+  const offset  = (page - 1) * limit;
+  const search  = req.query.search ? String(req.query.search) : '';
+  const sortDir = req.query.sortDir === 'ASC' ? 'ASC' : 'DESC';
+
+  // Whitelist to prevent SQL injection (column names can't be parameterized)
+  const sortByMap = {
+    date:     'sessionStart',
+    duration: 'TIMESTAMPDIFF(SECOND, sessionStart, sessionEnd)',
+    avgFocus: 'avgFocus',
+  };
+  const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
+
+  try {
+    const searchParam = `%${search.toLowerCase()}%`;
+    const [rows] = await db.execute(
+      `SELECT sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus
+       FROM UserSession
+       WHERE UserID = ? AND LOWER(sessionName) LIKE ?
+       ORDER BY ${orderExpr} ${sortDir}
+       LIMIT ? OFFSET ?`,
+      [userId, searchParam, limit, offset]
+    );
+    const [[{ total }]] = await db.execute(
+      `SELECT COUNT(*) AS total FROM UserSession WHERE UserID = ? AND LOWER(sessionName) LIKE ?`,
+      [userId, searchParam]
+    );
+    res.json({ success: true, sessions: rows, total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch paginated sessions" });
+  }
+});
+
 //Fetches 3 most recent sessions for a user (based on userID), used for homepage session snapshots
 app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
