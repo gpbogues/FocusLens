@@ -1,0 +1,218 @@
+.sessions-page {
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Toolbar */
+.sessions-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sessions-search {
+  flex: 1;
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.sessions-search:focus {
+  border-color: var(--color-accent);
+}
+
+.sessions-search::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.sessions-sort-group {
+  display: flex;
+  gap: 8px;
+}
+
+.sessions-sort-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+
+.sessions-sort-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.sessions-sort-btn.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background-color: var(--color-bg-elevated);
+}
+
+.sort-indicator {
+  font-size: 12px;
+}
+
+/* Session list */
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.no-sessions {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* Session card */
+.session-card {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.session-card:hover {
+  border-color: var(--color-accent);
+}
+
+.session-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.session-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.session-expand-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.session-expand-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+/* Expanded details */
+.session-card-details {
+  padding: 4px 20px 16px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: expandFade 0.22s ease forwards;
+}
+
+@keyframes expandFade {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.session-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+}
+
+.session-detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.session-detail-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.session-detail-duration {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.session-detail-description {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-detail-desc-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Pagination (page selection) */
+.sessions-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.pagination-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.pagination-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.pagination-btn.active {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
