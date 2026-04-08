@@ -84,6 +84,7 @@ async function deleteCognitoUserByEmail(email) {
     const conn = await db.getConnection();
     console.log("Connected to RDS MySQL");
 
+    //UserData table columns in case they don't exist 
     const columnsToAdd = [
       { name: 'verified',   def: 'BOOLEAN NOT NULL DEFAULT FALSE' },
       { name: 'created_at', def: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP' },
@@ -101,6 +102,23 @@ async function deleteCognitoUserByEmail(email) {
     }
     console.log("UserData table ready with verified, created_at, and avatarUrl columns");
 
+    //UserSession table columns in case they don't exist
+    const sessionColumnsToAdd = [
+      { name: 'sessionName',        def: "VARCHAR(128) NOT NULL DEFAULT ''" },
+      { name: 'sessionDescription', def: "TEXT NULL" },
+    ];
+    for (const col of sessionColumnsToAdd) {
+      const [rows] = await conn.execute(
+        `SELECT 1 FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'UserSession' AND COLUMN_NAME = ?`,
+        [col.name]
+      );
+      if (rows.length === 0) {
+        await conn.execute(`ALTER TABLE UserSession ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
+    console.log("UserSession table ready with sessionName and sessionDescription columns");
+
     conn.release();
   } catch (err) {
     console.error("server.js: RDS connection failed:", err);
@@ -112,14 +130,14 @@ app.get("/", (req, res) => {
   res.send("Backend server is running");
 });
 
-//UserSession API, saves user info into db after ending session 
+//UserSession API, saves user info into db after ending session
 //Note that avgFocus is set to 0, update when data could be fetched for it
 app.post("/session", async (req, res) => {
-  const { userId, sessionStart, sessionEnd } = req.body;
+  const { userId, sessionStart, sessionEnd, sessionName, sessionDescription } = req.body;
   try {
     await db.execute(
-      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus) VALUES (?, ?, ?, ?)",
-      [userId, sessionStart, sessionEnd, 0]
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)",
+      [userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription]
     );
     res.json({ success: true });
   } catch (err) {
@@ -133,7 +151,7 @@ app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
     const [rows] = await db.execute(
-      "SELECT sessionStart, sessionEnd FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3",
+      "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3",
       [userId]
     );
     res.json({ success: true, sessions: rows });
