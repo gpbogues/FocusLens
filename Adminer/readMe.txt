@@ -5,7 +5,6 @@ To run:
     To stop: docker compose down 
 
 Login:
-    needed info are within .env file of backend -> database_backend folder
     Username = (empty)
     Password = (empty)
     Database = /db/focuslens.db
