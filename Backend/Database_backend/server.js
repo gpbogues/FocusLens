@@ -356,7 +356,7 @@ app.put("/user/settings", async (req, res) => {
   try {
     db.prepare(
       "UPDATE UserData SET isDarkMode=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?"
-    ).run(isDarkMode, cameraEnabled, micEnabled, avatarId, userId);
+    ).run(isDarkMode ? 1 : 0, cameraEnabled ? 1 : 0, micEnabled ? 1 : 0, avatarId, userId);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
