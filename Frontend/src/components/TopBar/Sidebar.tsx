@@ -14,8 +14,8 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();   // clears state immediately, fires /logout in background
     onClose();
     //Scale out the layout before changing to login
     const el = document.querySelector('.layout-container') as HTMLElement | null;
@@ -24,7 +24,7 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
       el.style.opacity = '0';
       el.style.transform = 'scale(0.92)';
     }
-    //Wait for animation to finish before switching forms 
+    //Wait for animation to finish before switching forms
     setTimeout(() => {
       if (el) {
         el.style.opacity = '';

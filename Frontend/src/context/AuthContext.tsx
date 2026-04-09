@@ -15,10 +15,18 @@ interface InitialSettings {
   avatarId: string;
 }
 
+interface LoginPayload {
+  userId: number;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  settings: InitialSettings;
+}
+
 interface AuthContextType {
   user: User | null;
-  login: () => Promise<void>;
-  logout: () => Promise<void>;
+  login: (payload: LoginPayload) => void;
+  logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   isLoading: boolean;
   sessionTrigger: number;
@@ -49,21 +57,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .finally(() => setIsLoading(false));
   }, []);
 
-  //Called after /login succeeds, backend already set the cookie, so just fetch /init
-  const login = async () => {
-    const res = await fetch(`${API_URL}/init`, { credentials: 'include' });
-    const data = await res.json();
-    if (data.success) {
-      setUser({ username: data.username, email: data.email, userId: data.userId, avatarUrl: data.avatarUrl ?? null });
-      setInitialSettings(data.settings);
-    }
+  //Called after /login succeeds, the login response already contains user + settings,
+  //so we set state directly without an extra round-trip
+  const login = (payload: LoginPayload) => {
+    setUser({ username: payload.username, email: payload.email, userId: payload.userId, avatarUrl: payload.avatarUrl });
+    setInitialSettings(payload.settings);
   };
 
-  //Clears the cookie server-side then wipes local state
-  const logout = async () => {
-    await fetch(`${API_URL}/logout`, { method: 'POST', credentials: 'include' });
+  //Clears local state immediately(kinda), then fires /logout in the background to clear
+  //the httpOnly cookie server-side, no await needed, user is effectively logged out instantly(kinda)
+  const logout = () => {
     setUser(null);
     setInitialSettings(null);
+    fetch(`${API_URL}/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
   };
 
   //Updates user fields in context only (no localStorage, cookie holds the token)

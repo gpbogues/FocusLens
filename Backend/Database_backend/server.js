@@ -284,8 +284,21 @@ app.post("/login", async (req, res) => {
 
     //note that since user info are unique, rows[0] is the only row,
     //and it represents said users info
+    //Return user + settings in the login response so the frontend doesn't need a second /init call
     issueAuthCookie(res, user);
-    res.json({ success: true });
+    res.json({
+      success: true,
+      userId: user.UserID,
+      username: user.uName,
+      email: user.uEmail,
+      avatarUrl: user.avatarUrl ?? null,
+      settings: {
+        isDarkMode: user.isDarkMode,
+        cameraEnabled: user.cameraEnabled,
+        micEnabled: user.micEnabled,
+        avatarId: user.avatarId,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "server.js: Login error" });
