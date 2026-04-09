@@ -34,7 +34,7 @@ without external softwares to be downloaded
 dotenv.config();
 const app = express();
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5174",
   credentials: true,
 }));
 app.use(cookieParser());
@@ -300,6 +300,31 @@ app.get("/me", (req, res) => {
     res.json({ success: true, userId: decoded.userId, username: decoded.username, email: decoded.email, avatarUrl: decoded.avatarUrl });
   } catch {
     res.status(401).json({ success: false, message: "Invalid or expired token" });
+  }
+});
+
+//Combined init endpoint: decodes JWT and fetches user settings in one round-trip
+//Replaces separate /me + /user/settings calls on app startup to eliminate a network waterfall
+app.get("/init", async (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ success: false });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const [rows] = await db.execute(
+      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?",
+      [decoded.userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ success: false });
+    res.json({
+      success: true,
+      userId: decoded.userId,
+      username: decoded.username,
+      email: decoded.email,
+      avatarUrl: decoded.avatarUrl ?? null,
+      settings: rows[0],
+    });
+  } catch {
+    res.status(401).json({ success: false });
   }
 });
 

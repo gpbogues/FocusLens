@@ -8,6 +8,13 @@ interface User {
   avatarUrl: string | null;
 }
 
+interface InitialSettings {
+  isDarkMode: boolean;
+  cameraEnabled: boolean;
+  micEnabled: boolean;
+  avatarId: string;
+}
+
 interface AuthContextType {
   user: User | null;
   login: () => Promise<void>;
@@ -16,6 +23,7 @@ interface AuthContextType {
   isLoading: boolean;
   sessionTrigger: number;
   notifySessionSaved: () => void;
+  initialSettings: InitialSettings | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -25,36 +33,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionTrigger, setSessionTrigger] = useState(0);
+  const [initialSettings, setInitialSettings] = useState<InitialSettings | null>(null);
 
-  // On mount, check the httpOnly cookie via /me to rehydrate session
+  //On mount, call /init to repopulates session and prefetch settings in one round-trip
   useEffect(() => {
-    fetch(`${API_URL}/me`, { credentials: 'include' })
+    fetch(`${API_URL}/init`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           setUser({ username: data.username, email: data.email, userId: data.userId, avatarUrl: data.avatarUrl ?? null });
+          setInitialSettings(data.settings);
         }
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
 
-  // Called after /login succeeds — backend already set the cookie, so just fetch /me
+  //Called after /login succeeds, backend already set the cookie, so just fetch /init
   const login = async () => {
-    const res = await fetch(`${API_URL}/me`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/init`, { credentials: 'include' });
     const data = await res.json();
     if (data.success) {
       setUser({ username: data.username, email: data.email, userId: data.userId, avatarUrl: data.avatarUrl ?? null });
+      setInitialSettings(data.settings);
     }
   };
 
-  // Clears the cookie server-side then wipes local state
+  //Clears the cookie server-side then wipes local state
   const logout = async () => {
     await fetch(`${API_URL}/logout`, { method: 'POST', credentials: 'include' });
     setUser(null);
+    setInitialSettings(null);
   };
 
-  // Updates user fields in context only (no localStorage — cookie holds the token)
+  //Updates user fields in context only (no localStorage, cookie holds the token)
   const updateUser = (updates: Partial<User>) => {
     setUser(prev => {
       if (!prev) return prev;
@@ -65,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const notifySessionSaved = () => setSessionTrigger(prev => prev + 1);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved, initialSettings }}>
       {children}
     </AuthContext.Provider>
   );
