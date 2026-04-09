@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import TopBar from '../TopBar/TopBar';
 import RightSidebar from '../RightSidebar/RightSidebar';
@@ -9,9 +10,11 @@ interface LayoutProps {
 }
 
 const Layout = ({ isSessionActive, onToggleSession }: LayoutProps) => {
+  const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+
   return (
     <div className="layout-container">
-      <TopBar />
+      <TopBar isSessionActive={isSessionActive} />
       <div className="layout-body">
         <main className="main-content">
           <Outlet />
@@ -19,6 +22,8 @@ const Layout = ({ isSessionActive, onToggleSession }: LayoutProps) => {
         <RightSidebar
           isSessionActive={isSessionActive}
           onToggleSession={onToggleSession}
+          isCollapsed={isRightCollapsed}
+          onToggleCollapse={() => setIsRightCollapsed(prev => !prev)}
         />
       </div>
     </div>
