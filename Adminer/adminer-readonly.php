@@ -1,13 +1,9 @@
 <?php
 //Adminer Read-Only (should be): for checking tables and values they hold
 
-//Docker on Windows can't memory-map .db-shm (needed for WAL coordination),
-//causing SQLITE_IOERR when opening the mounted file directly.
-//Fix: copy the main DB file to /tmp on every request (plain byte copy, no SQLite)
-//and redirect Adminer to use that snapshot instead.
-@copy('/db/focuslens.db', '/tmp/focuslens_snapshot.db');
-if (isset($_GET['db']))  $_GET['db']  = '/tmp/focuslens_snapshot.db';
-if (isset($_POST['db'])) $_POST['db'] = '/tmp/focuslens_snapshot.db';
+//On EC2 (Linux), SQLite WAL mode works fine with direct file access,
+//the full directory is mounted at /db so .db-shm and .db-wal are accessible,
+//No snapshot copy needed; reads reflect live data including WAL writes.
 
 class AdminerReadOnly {
 
