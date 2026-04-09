@@ -27,6 +27,11 @@ class AdminerReadOnly {
         return $query;
     }
 
+    //Allow passwordless SQLite login
+    function login($login, $password) {
+        return true;
+    }
+
     //Block imports
     function importServerPath() {
         return '';
