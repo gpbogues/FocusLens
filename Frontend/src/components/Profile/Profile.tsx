@@ -288,7 +288,7 @@ const Profile = () => {
           }
         >
           {isCustomSelected && customAvatarUrl
-            ? <img src={customAvatarUrl} alt="Custom avatar" className="profile-avatar-custom-img" />
+            ? <img src={customAvatarUrl} alt="Custom avatar" className="profile-avatar-custom-img" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             : <span className="profile-avatar-emoji">{selectedAvatar.emoji}</span>
           }
         </div>
@@ -326,7 +326,7 @@ const Profile = () => {
               {uploadLoading ? (
                 <span className="avatar-upload-spinner" />
               ) : customAvatarUrl ? (
-                <img src={customAvatarUrl} alt="Custom" className="avatar-upload-preview-img" />
+                <img src={customAvatarUrl} alt="Custom" className="avatar-upload-preview-img" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <span className="avatar-upload-plus">+</span>
               )}

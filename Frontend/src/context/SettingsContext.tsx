@@ -73,11 +73,12 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   }, [isDarkMode]);
 
   const saveSettings = (patch: Partial<{ isDarkMode: boolean; cameraEnabled: boolean; micEnabled: boolean; avatarId: string }>) => {
+    if (!userId) return;
     fetch(`${API_URL}/user/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ isDarkMode, cameraEnabled, micEnabled, avatarId, ...patch }),
+      body: JSON.stringify({ userId, isDarkMode, cameraEnabled, micEnabled, avatarId, ...patch }),
     }).catch(() => {});
   };
 
