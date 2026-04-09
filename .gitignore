@@ -22,3 +22,8 @@ env
 node_modules/
 dist/
 .eslintcache
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
