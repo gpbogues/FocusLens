@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -41,13 +41,6 @@ const Profile = () => {
   const [editorFile, setEditorFile] = useState<File | null>(null);
   const [avatarMenu, setAvatarMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const savedAvatarId = localStorage.getItem(`user_${user?.userId}_avatarId`);
-    if (user?.avatarUrl && !savedAvatarId) {
-      setAvatarId(CUSTOM_AVATAR_ID);
-    }
-  }, []);
 
   const handleUploadClick = () => {
     setUploadError('');
