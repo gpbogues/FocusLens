@@ -36,20 +36,20 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
     if (initialSettings) {
       //Settings arrived with /init, no extra round-trip needed
-      setIsDarkModeState(initialSettings.isDarkMode);
-      setCameraEnabledState(initialSettings.cameraEnabled);
-      setMicEnabledState(initialSettings.micEnabled);
-      setAvatarIdState(initialSettings.avatarId);
+      setIsDarkModeState(Boolean(initialSettings.isDarkMode));
+      setCameraEnabledState(Boolean(initialSettings.cameraEnabled));
+      setMicEnabledState(Boolean(initialSettings.micEnabled));
+      setAvatarIdState(initialSettings.avatarId ?? 'fox');
     } else {
       //Fallback: fetch separately (should rarely happen)
       fetch(`${API_URL}/user/settings`, { credentials: 'include' })
         .then(res => res.json())
         .then(data => {
           if (data.success) {
-            setIsDarkModeState(data.isDarkMode);
-            setCameraEnabledState(data.cameraEnabled);
-            setMicEnabledState(data.micEnabled);
-            setAvatarIdState(data.avatarId);
+            setIsDarkModeState(Boolean(data.isDarkMode));
+            setCameraEnabledState(Boolean(data.cameraEnabled));
+            setMicEnabledState(Boolean(data.micEnabled));
+            setAvatarIdState(data.avatarId ?? 'fox');
           }
         })
         .catch(() => {});
