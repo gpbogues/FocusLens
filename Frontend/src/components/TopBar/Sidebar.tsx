@@ -14,8 +14,8 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     onClose();
     //Scale out the layout before changing to login
     const el = document.querySelector('.layout-container') as HTMLElement | null;
