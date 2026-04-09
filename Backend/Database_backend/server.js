@@ -56,12 +56,12 @@ function issueAuthCookie(res, user) {
   });
 }
 
-//SQLite connection - file-based, no network credentials needed
+//SQLite connection, file-based, no network credentials needed
 const db = new Database(process.env.DB_PATH || "./focuslens.db");
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
-//Initialize schema - CREATE TABLE IF NOT EXISTS is idempotent, safe to run every startup
+//Initialize schema, CREATE TABLE IF NOT EXISTS is idempotent, safe to run every startup
 db.exec(`
   CREATE TABLE IF NOT EXISTS UserData (
     UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +100,12 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_usersession_userid_start
     ON UserSession(UserID, sessionStart DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_sessionchunk_sessionid
+    ON SessionChunk(SessionID);
+
+  CREATE INDEX IF NOT EXISTS idx_sessionchunk_userid
+    ON SessionChunk(UserID);
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
@@ -247,7 +253,7 @@ app.delete("/register-rollback", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const rows = db.prepare("SELECT * FROM UserData WHERE uEmail=?").all(email);
+    const rows = db.prepare("SELECT UserID, uName, uEmail, uPassword, verified, avatarUrl, isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE uEmail=?").all(email);
 
     if (rows.length === 0) {
       return res.json({ success: false, message: "server.js: Invalid email or password" });
@@ -370,7 +376,7 @@ app.put("/user/username", async (req, res) => {
   try {
     db.prepare("UPDATE UserData SET uName = ? WHERE UserID = ?").run(newUsername, userId);
     // Re-issue JWT so the new username is reflected immediately on refresh
-    const user = db.prepare("SELECT * FROM UserData WHERE UserID = ?").get(userId);
+    const user = db.prepare("SELECT UserID, uName, uEmail, avatarUrl FROM UserData WHERE UserID = ?").get(userId);
     if (user) issueAuthCookie(res, user);
     res.json({ success: true });
   } catch (err) {
@@ -529,7 +535,7 @@ app.put("/user/avatar", async (req, res) => {
     }
 
     // Re-issue JWT so the new avatarUrl is reflected immediately on refresh
-    const user = db.prepare("SELECT * FROM UserData WHERE UserID = ?").get(userId);
+    const user = db.prepare("SELECT UserID, uName, uEmail, avatarUrl FROM UserData WHERE UserID = ?").get(userId);
     if (user) issueAuthCookie(res, user);
     res.json({ success: true });
   } catch (err) {
@@ -610,21 +616,22 @@ async function cleanupUnverifiedUsers() {
       AND created_at < datetime('now', '-24 hours')
     `).all();
 
-    //Basic for loop that traverse userData table to find unverified users
-    //Not final, needs to be reviewed at later point (might be bad given larger user base)
+    //Delete each user from Cognito first (must be done one at a time via AWS API)
     for (const user of unverifiedUsers) {
       const email = user.uEmail;
       try {
-        //Delete from cognito first (may already be gone, so ignore errors)
         await deleteCognitoUserByEmail(email);
       } catch (cognitoErr) {
         //User may not exist in cognito anymore
         console.log(`server.js: Cognito delete skipped for ${email}: ${cognitoErr.message}`);
       }
+    }
 
-      //Also deletes unverified users from sqlite
-      db.prepare("DELETE FROM UserData WHERE uEmail = ?").run(email);
-      console.log(`server.js: Cleaned up unverified user: ${email}`);
+    //Batch delete all unverified users from SQLite in a single query
+    if (unverifiedUsers.length > 0) {
+      const placeholders = unverifiedUsers.map(() => "?").join(", ");
+      const emails = unverifiedUsers.map((u) => u.uEmail);
+      db.prepare(`DELETE FROM UserData WHERE uEmail IN (${placeholders})`).run(...emails);
     }
 
     console.log(`server.js: Cleanup complete. Removed ${unverifiedUsers.length} unverified user(s).`);
