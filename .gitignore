@@ -15,6 +15,7 @@ Dataset/
 
 # env file that stores database login info
 .env
+.env.local
 env
 
 # Frontend / JavaScript (10 billion node files)
