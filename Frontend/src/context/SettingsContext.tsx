@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
@@ -14,45 +14,48 @@ interface SettingsContextType {
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const userId = user?.userId;
 
-  // Prefix every localStorage key with the userId so settings are per-user
-  const k = (key: string) => `user_${userId}_${key}`;
+  const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
+  const [cameraEnabled, setCameraEnabledState] = useState<boolean>(true);
+  const [micEnabled, setMicEnabledState] = useState<boolean>(false);
+  const [avatarId, setAvatarIdState] = useState<string>('fox');
 
-  const [isDarkMode, setIsDarkModeState] = useState<boolean>(() => {
-    const stored = localStorage.getItem(k('isDarkMode'));
-    return stored !== null ? JSON.parse(stored) : true;
-  });
+  // Track whether initial settings have been loaded for this user
+  const loadedForUser = useRef<number | undefined>(undefined);
 
-  const [cameraEnabled, setCameraEnabledState] = useState<boolean>(() => {
-    const stored = localStorage.getItem(k('cameraEnabled'));
-    return stored !== null ? JSON.parse(stored) : true;
-  });
-
-  const [micEnabled, setMicEnabledState] = useState<boolean>(() => {
-    const stored = localStorage.getItem(k('micEnabled'));
-    return stored !== null ? JSON.parse(stored) : false;
-  });
-
-  const [avatarId, setAvatarIdState] = useState<string>(() => {
-    return localStorage.getItem(k('avatarId')) || 'fox';
-  });
-
-  // When the logged-in user changes, reload all settings for the new user
+  // When the logged-in user changes, fetch their settings from the DB
   useEffect(() => {
-    const dark = localStorage.getItem(k('isDarkMode'));
-    setIsDarkModeState(dark !== null ? JSON.parse(dark) : true);
+    if (!userId) return;
+    if (loadedForUser.current === userId) return;
+    loadedForUser.current = userId;
 
-    const cam = localStorage.getItem(k('cameraEnabled'));
-    setCameraEnabledState(cam !== null ? JSON.parse(cam) : true);
+    fetch(`${API_URL}/user/settings`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setIsDarkModeState(data.isDarkMode);
+          setCameraEnabledState(data.cameraEnabled);
+          setMicEnabledState(data.micEnabled);
+          setAvatarIdState(data.avatarId);
+        }
+      })
+      .catch(() => {});
+  }, [userId]);
 
-    const mic = localStorage.getItem(k('micEnabled'));
-    setMicEnabledState(mic !== null ? JSON.parse(mic) : false);
-
-    setAvatarIdState(localStorage.getItem(k('avatarId')) || 'fox');
+  // When user logs out, reset to defaults and clear the loaded marker
+  useEffect(() => {
+    if (!userId) {
+      loadedForUser.current = undefined;
+      setIsDarkModeState(true);
+      setCameraEnabledState(true);
+      setMicEnabledState(false);
+      setAvatarIdState('fox');
+    }
   }, [userId]);
 
   // Apply dark/light theme to DOM whenever isDarkMode changes
@@ -60,24 +63,33 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
+  const saveSettings = (patch: Partial<{ isDarkMode: boolean; cameraEnabled: boolean; micEnabled: boolean; avatarId: string }>) => {
+    fetch(`${API_URL}/user/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ isDarkMode, cameraEnabled, micEnabled, avatarId, ...patch }),
+    }).catch(() => {});
+  };
+
   const setIsDarkMode = (v: boolean) => {
     setIsDarkModeState(v);
-    localStorage.setItem(k('isDarkMode'), JSON.stringify(v));
+    saveSettings({ isDarkMode: v });
   };
 
   const setCameraEnabled = (v: boolean) => {
     setCameraEnabledState(v);
-    localStorage.setItem(k('cameraEnabled'), JSON.stringify(v));
+    saveSettings({ cameraEnabled: v });
   };
 
   const setMicEnabled = (v: boolean) => {
     setMicEnabledState(v);
-    localStorage.setItem(k('micEnabled'), JSON.stringify(v));
+    saveSettings({ micEnabled: v });
   };
 
   const setAvatarId = (id: string) => {
     setAvatarIdState(id);
-    localStorage.setItem(k('avatarId'), id);
+    saveSettings({ avatarId: id });
   };
 
   return (
