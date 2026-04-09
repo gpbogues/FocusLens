@@ -6,4 +6,4 @@ services:
       - "8080:8080"
     volumes:
       - ./adminer-readonly.php:/var/www/html/index.php:ro
-      - ../Backend/Database_backend/focuslens.db:/db/focuslens.db:ro
+      - ../Backend/Database_backend:/db
