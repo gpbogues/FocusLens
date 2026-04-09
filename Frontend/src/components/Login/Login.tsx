@@ -231,8 +231,8 @@ function Login() {
 
       //This sections works with AuthContext to store user info globally
       if (data.success) {
-        //Backend set the httpOnly cookie; fetch /me to load user into context
-        await login();
+        //Login response already contains user + settings, set state directly, no extra round-trip
+        login(data);
 
         //Scale out the login box before navigating to home
         const el = document.querySelector('.login-box') as HTMLElement | null;
