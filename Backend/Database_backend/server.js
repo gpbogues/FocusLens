@@ -1,5 +1,5 @@
 import express from "express";
-import mysql from "mysql2/promise";
+import Database from "better-sqlite3";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -7,6 +7,8 @@ import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import pkg from "aws-sdk";
 const { CognitoIdentityServiceProvider, S3, config: awsConfig } = pkg;
+
+dotenv.config();
 
 //AWS credentials (changed to ec2 backend, no longer needed local)
 awsConfig.update({
@@ -28,10 +30,9 @@ This also requries new APIs such as /send-friend-request and such,
 make to update swagger API routes when adding
 
 D3 Observe, to graph db values and poten tables, point is to have it run as a server.js
-without external softwares to be downloaded 
+without external softwares to be downloaded
 */
 
-dotenv.config();
 const app = express();
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN || "http://localhost:5174",
@@ -55,14 +56,53 @@ function issueAuthCookie(res, user) {
   });
 }
 
-//MySQL pool, injects connection info from .env file to establish connection with RDS instance
-const db = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
-});
+//SQLite connection - file-based, no network credentials needed
+const db = new Database(process.env.DB_PATH || "./focuslens.db");
+db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
+
+//Initialize schema - CREATE TABLE IF NOT EXISTS is idempotent, safe to run every startup
+db.exec(`
+  CREATE TABLE IF NOT EXISTS UserData (
+    UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
+    uEmail        TEXT NOT NULL UNIQUE,
+    uName         TEXT NOT NULL,
+    uPassword     TEXT NOT NULL,
+    verified      INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    avatarUrl     TEXT NULL DEFAULT NULL,
+    isDarkMode    INTEGER,
+    cameraEnabled INTEGER,
+    micEnabled    INTEGER,
+    avatarId      TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS UserSession (
+    SessionID          INTEGER PRIMARY KEY AUTOINCREMENT,
+    UserID             INTEGER NOT NULL,
+    sessionStart       TEXT NOT NULL DEFAULT (datetime('now')),
+    sessionEnd         TEXT NOT NULL DEFAULT (datetime('now')),
+    avgFocus           REAL NOT NULL,
+    sessionName        TEXT NOT NULL DEFAULT '',
+    sessionDescription TEXT NULL,
+    FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS SessionChunk (
+    ChunkId     INTEGER PRIMARY KEY AUTOINCREMENT,
+    SessionID   INTEGER NOT NULL,
+    UserID      INTEGER NOT NULL,
+    endOfChunk  TEXT NOT NULL DEFAULT (datetime('now')),
+    chunkStatus TEXT CHECK(chunkStatus IN ('VF', 'SF', 'VU', 'SU')),
+    FOREIGN KEY (SessionID) REFERENCES UserSession(SessionID) ON DELETE CASCADE,
+    FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_usersession_userid_start
+    ON UserSession(UserID, sessionStart DESC);
+`);
+
+console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
 
 //Cognito client instance, injects connection info from .env file to connect with AWS Cognito
 const cognito = new CognitoIdentityServiceProvider({ region: "us-east-1" });
@@ -77,7 +117,7 @@ const USER_POOL_ID = process.env.USER_POOL_ID;
 
 //Looks up real cognito username via email filter before deleting,
 //as adminDeleteUser requires the pool username (a UUID) not the email alias,
-//passing the email directly causes failure 
+//passing the email directly causes failure
 async function deleteCognitoUserByEmail(email) {
   const listResult = await cognito.listUsers({
     UserPoolId: USER_POOL_ID,
@@ -99,53 +139,6 @@ async function deleteCognitoUserByEmail(email) {
   console.log(`server.js: Deleted Cognito user ${cognitoUsername} (${email})`);
 }
 
-//Used for testing if RDS connection is successful
-(async () => {
-  try {
-    const conn = await db.getConnection();
-    console.log("Connected to RDS MySQL");
-
-    //UserData table columns in case they don't exist 
-    const columnsToAdd = [
-      { name: 'verified',   def: 'BOOLEAN NOT NULL DEFAULT FALSE' },
-      { name: 'created_at', def: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP' },
-      { name: 'avatarUrl',  def: 'VARCHAR(500) NULL DEFAULT NULL' },
-    ];
-    for (const col of columnsToAdd) {
-      const [rows] = await conn.execute(
-        `SELECT 1 FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'UserData' AND COLUMN_NAME = ?`,
-        [col.name]
-      );
-      if (rows.length === 0) {
-        await conn.execute(`ALTER TABLE UserData ADD COLUMN ${col.name} ${col.def}`);
-      }
-    }
-    console.log("UserData table ready with verified, created_at, and avatarUrl columns");
-
-    //UserSession table columns in case they don't exist
-    const sessionColumnsToAdd = [
-      { name: 'sessionName',        def: "VARCHAR(128) NOT NULL DEFAULT ''" },
-      { name: 'sessionDescription', def: "TEXT NULL" },
-    ];
-    for (const col of sessionColumnsToAdd) {
-      const [rows] = await conn.execute(
-        `SELECT 1 FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'UserSession' AND COLUMN_NAME = ?`,
-        [col.name]
-      );
-      if (rows.length === 0) {
-        await conn.execute(`ALTER TABLE UserSession ADD COLUMN ${col.name} ${col.def}`);
-      }
-    }
-    console.log("UserSession table ready with sessionName and sessionDescription columns");
-
-    conn.release();
-  } catch (err) {
-    console.error("server.js: RDS connection failed:", err);
-  }
-})();
-
 //Used for testing if backend server is online
 app.get("/", (_req, res) => {
   res.send("Backend server is running");
@@ -156,10 +149,9 @@ app.get("/", (_req, res) => {
 app.post("/session", async (req, res) => {
   const { userId, sessionStart, sessionEnd, sessionName, sessionDescription } = req.body;
   try {
-    await db.execute(
-      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)",
-      [userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription]
-    );
+    db.prepare(
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -179,7 +171,7 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
   // Whitelist to prevent SQL injection (column names can't be parameterized)
   const sortByMap = {
     date:     'sessionStart',
-    duration: 'TIMESTAMPDIFF(SECOND, sessionStart, sessionEnd)',
+    duration: "(strftime('%s', sessionEnd) - strftime('%s', sessionStart))",
     avgFocus: 'avgFocus',
   };
   const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
@@ -189,15 +181,14 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
     //COUNT(*) OVER() is a window function computed before LIMIT/OFFSET, so it reflects the
     //full matching row count, eliminating the need for a separate COUNT query
     //tldr, one query instead of two for sesssions page
-    const [rows] = await db.execute(
+    const rows = db.prepare(
       `SELECT sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus,
               COUNT(*) OVER() AS total
        FROM UserSession
        WHERE UserID = ? AND LOWER(sessionName) LIKE ?
        ORDER BY ${orderExpr} ${sortDir}
-       LIMIT ${limit} OFFSET ${offset}`,
-      [userId, searchParam]
-    );
+       LIMIT ${limit} OFFSET ${offset}`
+    ).all(userId, searchParam);
     const total = rows.length > 0 ? Number(rows[0].total) : 0;
     res.json({ success: true, sessions: rows, total });
   } catch (err) {
@@ -210,10 +201,9 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
 app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
-    const [rows] = await db.execute(
-      "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3",
-      [userId]
-    );
+    const rows = db.prepare(
+      "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3"
+    ).all(userId);
     res.json({ success: true, sessions: rows });
   } catch (err) {
     console.error(err);
@@ -226,31 +216,26 @@ app.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 12);
-    await db.execute(
-      "INSERT INTO UserData (uEmail, uName, uPassword, verified, created_at) VALUES (?, ?, ?, FALSE, NOW())",
-      [email, username, hashedPassword]
-    );
+    db.prepare(
+      "INSERT INTO UserData (uEmail, uName, uPassword, verified, created_at) VALUES (?, ?, ?, 0, datetime('now'))"
+    ).run(email, username, hashedPassword);
     res.json({ message: "User registered" });
   } catch (err) {
     console.error(err);
-    //This would also trigger if cognito doesn't delete its copy of user 
-    if (err.code === "ER_DUP_ENTRY" || err.errno === 1062) {
+    //This would also trigger if cognito doesn't delete its copy of user
+    if (err.code === "SQLITE_CONSTRAINT_UNIQUE" || (err.message && err.message.includes("UNIQUE constraint failed"))) {
       return res.status(400).json({ message: "server.js: Email already exists" });
     }
     return res.status(500).json({ message: "server.js: User register error" });
   }
 });
 
-//Rolls back an rds insert if cognitoSignUp fails after /register succeeds,
-//prevents the email from being permanently locked out(rds side) until cleanup runs
-//basically removes the unverified user that was inserted into RDS if cognito sign up fails
+//Rolls back a sqlite insert if cognitoSignUp fails after /register succeeds,
+//prevents the email from being permanently locked out until cleanup runs
 app.delete("/register-rollback", async (req, res) => {
   const { email } = req.body;
   try {
-    await db.execute(
-      "DELETE FROM UserData WHERE uEmail = ? AND verified = FALSE",
-      [email]
-    );
+    db.prepare("DELETE FROM UserData WHERE uEmail = ? AND verified = 0").run(email);
     res.json({ success: true });
   } catch (err) {
     console.error("server.js: register-rollback error:", err);
@@ -262,10 +247,7 @@ app.delete("/register-rollback", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const [rows] = await db.execute(
-      "SELECT * FROM UserData WHERE uEmail=?",
-      [email]
-    );
+    const rows = db.prepare("SELECT * FROM UserData WHERE uEmail=?").all(email);
 
     if (rows.length === 0) {
       return res.json({ success: false, message: "server.js: Invalid email or password" });
@@ -324,18 +306,17 @@ app.get("/init", async (req, res) => {
   if (!token) return res.status(401).json({ success: false });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const [rows] = await db.execute(
-      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?",
-      [decoded.userId]
-    );
-    if (rows.length === 0) return res.status(404).json({ success: false });
+    const row = db.prepare(
+      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?"
+    ).get(decoded.userId);
+    if (!row) return res.status(404).json({ success: false });
     res.json({
       success: true,
       userId: decoded.userId,
       username: decoded.username,
       email: decoded.email,
       avatarUrl: decoded.avatarUrl ?? null,
-      settings: rows[0],
+      settings: row,
     });
   } catch {
     res.status(401).json({ success: false });
@@ -358,12 +339,11 @@ app.get("/user/settings", async (req, res) => {
   if (!token) return res.status(401).json({ success: false });
   try {
     const { userId } = jwt.verify(token, process.env.JWT_SECRET);
-    const [rows] = await db.execute(
-      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?",
-      [userId]
-    );
-    if (rows.length === 0) return res.status(404).json({ success: false });
-    res.json({ success: true, ...rows[0] });
+    const row = db.prepare(
+      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?"
+    ).get(userId);
+    if (!row) return res.status(404).json({ success: false });
+    res.json({ success: true, ...row });
   } catch {
     res.status(401).json({ success: false });
   }
@@ -376,27 +356,23 @@ app.put("/user/settings", async (req, res) => {
   try {
     const { userId } = jwt.verify(token, process.env.JWT_SECRET);
     const { isDarkMode, cameraEnabled, micEnabled, avatarId } = req.body;
-    await db.execute(
-      "UPDATE UserData SET isDarkMode=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?",
-      [isDarkMode, cameraEnabled, micEnabled, avatarId, userId]
-    );
+    db.prepare(
+      "UPDATE UserData SET isDarkMode=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?"
+    ).run(isDarkMode, cameraEnabled, micEnabled, avatarId, userId);
     res.json({ success: true });
   } catch {
     res.status(401).json({ success: false });
   }
 });
 
-//Updates username in mysql
+//Updates username in sqlite
 app.put("/user/username", async (req, res) => {
   const { userId, newUsername } = req.body;
   try {
-    await db.execute(
-      "UPDATE UserData SET uName = ? WHERE UserID = ?",
-      [newUsername, userId]
-    );
+    db.prepare("UPDATE UserData SET uName = ? WHERE UserID = ?").run(newUsername, userId);
     // Re-issue JWT so the new username is reflected immediately on refresh
-    const [rows] = await db.execute("SELECT * FROM UserData WHERE UserID = ?", [userId]);
-    if (rows.length > 0) issueAuthCookie(res, rows[0]);
+    const user = db.prepare("SELECT * FROM UserData WHERE UserID = ?").get(userId);
+    if (user) issueAuthCookie(res, user);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -404,15 +380,12 @@ app.put("/user/username", async (req, res) => {
   }
 });
 
-//Updates password in mysql
+//Updates password in sqlite
 app.put("/user/password", async (req, res) => {
   const { userId, newPassword } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await db.execute(
-      "UPDATE UserData SET uPassword = ? WHERE UserID = ?",
-      [hashedPassword, userId]
-    );
+    db.prepare("UPDATE UserData SET uPassword = ? WHERE UserID = ?").run(hashedPassword, userId);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -425,10 +398,7 @@ app.put("/reset-password", async (req, res) => {
   const { email, newPassword } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await db.execute(
-      "UPDATE UserData SET uPassword = ? WHERE uEmail = ?",
-      [hashedPassword, email]
-    );
+    db.prepare("UPDATE UserData SET uPassword = ? WHERE uEmail = ?").run(hashedPassword, email);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -436,44 +406,35 @@ app.put("/reset-password", async (req, res) => {
   }
 });
 
-//Check if email is already taken in rds before creating a cognito user,
+//Check if email is already taken before creating a cognito user,
 //prevents phantom users from being created for duplicate emails
 //differs from /user/email in that this is ran in profile.tsx before cognitoSignUp
 app.get("/check-email", async (req, res) => {
   const { email } = req.query;
   try {
-    const [rows] = await db.execute(
-      "SELECT UserID FROM UserData WHERE uEmail = ?",
-      [email]
-    );
-    res.json({ available: rows.length === 0 });
+    const row = db.prepare("SELECT UserID FROM UserData WHERE uEmail = ?").get(email);
+    res.json({ available: !row });
   } catch (err) {
     console.error("server.js: check-email error:", err);
     res.status(500).json({ available: false, message: "Check failed" });
   }
 });
 
-//Updates email in sql, checks for duplicate email first
+//Updates email in sqlite, checks for duplicate email first
 //Deletes cognito temp user after verification same as register flow
-//this runs after cognito verification is complete 
+//this runs after cognito verification is complete
 app.put("/user/email", async (req, res) => {
   const { userId, newEmail } = req.body;
   try {
     //Check if new email already exists
-    //mostly for race condition edge case between two users 
-    const [existing] = await db.execute(
-      "SELECT * FROM UserData WHERE uEmail = ?",
-      [newEmail]
-    );
-    if (existing.length > 0) {
+    //mostly for race condition edge case between two users
+    const existing = db.prepare("SELECT UserID FROM UserData WHERE uEmail = ?").get(newEmail);
+    if (existing) {
       return res.json({ success: false, message: "Email in use" });
     }
 
-    //Update email in sql
-    await db.execute(
-      "UPDATE UserData SET uEmail = ? WHERE UserID = ?",
-      [newEmail, userId]
-    );
+    //Update email in sqlite
+    db.prepare("UPDATE UserData SET uEmail = ? WHERE UserID = ?").run(newEmail, userId);
 
     //Delete temp cognito user after verification, same pattern as register
     try {
@@ -490,24 +451,20 @@ app.put("/user/email", async (req, res) => {
   }
 });
 
-//Called after Cognito email verification, marks user as verified in RDS
-//then deletes temp user from Cognito so RDS is the only instance to store user info
+//Called after Cognito email verification, marks user as verified in sqlite
+//then deletes temp user from Cognito so sqlite is the only instance to store user info
 app.post("/verify-complete", async (req, res) => {
-  console.log("verify-complete hit with:", req.body)
+  console.log("verify-complete hit with:", req.body);
   const { email } = req.body;
   try {
-    //Mark user as verified in RDS
-    await db.execute(
-      "UPDATE UserData SET verified = TRUE WHERE uEmail = ?",
-      [email]
-    );
+    //Mark user as verified in sqlite
+    db.prepare("UPDATE UserData SET verified = 1 WHERE uEmail = ?").run(email);
 
-    //Delete from cognito, RDS holds data so no phantoms in cognito
+    //Delete from cognito, sqlite holds data so no phantoms in cognito
     try {
       await deleteCognitoUserByEmail(email);
     } catch (cognitoErr) {
-      //Log but don't fail, user is already verified in RDS
-      //this error just means that if user gets deleted from RDS instance, creates a phantom user in cognito
+      //Log but don't fail, user is already verified in sqlite
       console.error("server.js: Cognito delete error (non-fatal):", cognitoErr.message);
     }
 
@@ -551,22 +508,16 @@ app.post("/user/avatar/presigned-url", async (req, res) => {
   }
 });
 
-//Saves the S3 public URL to the user's profile in mysql, deletes old S3 object if one exists
+//Saves the S3 public URL to the user's profile in sqlite, deletes old S3 object if one exists
 app.put("/user/avatar", async (req, res) => {
   const { userId, avatarUrl } = req.body;
   try {
     //Fetch old avatar URL before overwriting
-    const [rows] = await db.execute(
-      "SELECT avatarUrl FROM UserData WHERE UserID = ?",
-      [userId]
-    );
-    const oldUrl = rows[0]?.avatarUrl;
+    const row = db.prepare("SELECT avatarUrl FROM UserData WHERE UserID = ?").get(userId);
+    const oldUrl = row?.avatarUrl;
 
     //Update DB with new URL
-    await db.execute(
-      "UPDATE UserData SET avatarUrl = ? WHERE UserID = ?",
-      [avatarUrl, userId]
-    );
+    db.prepare("UPDATE UserData SET avatarUrl = ? WHERE UserID = ?").run(avatarUrl, userId);
 
     //Delete old S3 object if it exists and is in our bucket
     if (oldUrl && oldUrl.includes(process.env.S3_AVATAR_BUCKET)) {
@@ -579,8 +530,8 @@ app.put("/user/avatar", async (req, res) => {
     }
 
     // Re-issue JWT so the new avatarUrl is reflected immediately on refresh
-    const [updatedRows] = await db.execute("SELECT * FROM UserData WHERE UserID = ?", [userId]);
-    if (updatedRows.length > 0) issueAuthCookie(res, updatedRows[0]);
+    const user = db.prepare("SELECT * FROM UserData WHERE UserID = ?").get(userId);
+    if (user) issueAuthCookie(res, user);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -592,16 +543,10 @@ app.put("/user/avatar", async (req, res) => {
 app.delete("/user/avatar", async (req, res) => {
   const { userId } = req.body;
   try {
-    const [rows] = await db.execute(
-      "SELECT avatarUrl FROM UserData WHERE UserID = ?",
-      [userId]
-    );
-    const oldUrl = rows[0]?.avatarUrl;
+    const row = db.prepare("SELECT avatarUrl FROM UserData WHERE UserID = ?").get(userId);
+    const oldUrl = row?.avatarUrl;
 
-    await db.execute(
-      "UPDATE UserData SET avatarUrl = NULL WHERE UserID = ?",
-      [userId]
-    );
+    db.prepare("UPDATE UserData SET avatarUrl = NULL WHERE UserID = ?").run(userId);
 
     if (oldUrl && oldUrl.includes(process.env.S3_AVATAR_BUCKET)) {
       const oldKey = new URL(oldUrl).pathname.slice(1);
@@ -619,19 +564,16 @@ app.delete("/user/avatar", async (req, res) => {
   }
 });
 
-//Deletes user account from RDS and their S3 avatar if one exists
+//Deletes user account from sqlite and their S3 avatar if one exists
 app.delete("/user/account", async (req, res) => {
   const { userId, password } = req.body;
   try {
-    const [rows] = await db.execute(
-      "SELECT avatarUrl, uPassword FROM UserData WHERE UserID = ?",
-      [userId]
-    );
-    if (rows.length === 0) return res.json({ success: false, message: "User not found" });
-    const passwordMatch = await bcrypt.compare(password, rows[0].uPassword);
+    const row = db.prepare("SELECT avatarUrl, uPassword FROM UserData WHERE UserID = ?").get(userId);
+    if (!row) return res.json({ success: false, message: "User not found" });
+    const passwordMatch = await bcrypt.compare(password, row.uPassword);
     if (!passwordMatch) return res.json({ success: false, message: "Incorrect password" });
 
-    const avatarUrl = rows[0]?.avatarUrl;
+    const avatarUrl = row.avatarUrl;
 
     if (avatarUrl && avatarUrl.includes(process.env.S3_AVATAR_BUCKET)) {
       const key = new URL(avatarUrl).pathname.slice(1);
@@ -642,7 +584,7 @@ app.delete("/user/account", async (req, res) => {
       console.log(`server.js: Deleted avatar from S3 for user ${userId}`);
     }
 
-    await db.execute("DELETE FROM UserData WHERE UserID = ?", [userId]);
+    db.prepare("DELETE FROM UserData WHERE UserID = ?").run(userId);
     console.log(`server.js: Deleted account for user ${userId}`);
     res.json({ success: true });
   } catch (err) {
@@ -651,23 +593,23 @@ app.delete("/user/account", async (req, res) => {
   }
 });
 
-//Cleanup job, runs every 24 hours
+//Cleanup job, runs every hour
 //Needs more testing to be done, for now keep as is
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; 
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 //The purpose of this is to remove users who didn't finish their verification,
 //users that verify gets deleted off of cognito right away,
 //but those that don't won't be, as such it creates phantoms,
-//this is a way to resolve the issue 
+//this is a way to resolve the issue
 async function cleanupUnverifiedUsers() {
   console.log("server.js: Running unverified user cleanup");
   try {
-    //Defines unverified users older than 24 hours 
-    const [unverifiedUsers] = await db.execute(`
+    //Defines unverified users older than 24 hours
+    const unverifiedUsers = db.prepare(`
       SELECT uEmail FROM UserData
-      WHERE verified = FALSE
-      AND created_at < NOW() - INTERVAL 24 HOUR
-    `);
+      WHERE verified = 0
+      AND created_at < datetime('now', '-24 hours')
+    `).all();
 
     //Basic for loop that traverse userData table to find unverified users
     //Not final, needs to be reviewed at later point (might be bad given larger user base)
@@ -677,12 +619,12 @@ async function cleanupUnverifiedUsers() {
         //Delete from cognito first (may already be gone, so ignore errors)
         await deleteCognitoUserByEmail(email);
       } catch (cognitoErr) {
-        //User may not exist in cognito anymore 
+        //User may not exist in cognito anymore
         console.log(`server.js: Cognito delete skipped for ${email}: ${cognitoErr.message}`);
       }
 
-      //Also deletes unverified users from RDS
-      await db.execute("DELETE FROM UserData WHERE uEmail = ?", [email]);
+      //Also deletes unverified users from sqlite
+      db.prepare("DELETE FROM UserData WHERE uEmail = ?").run(email);
       console.log(`server.js: Cleaned up unverified user: ${email}`);
     }
 
@@ -692,7 +634,7 @@ async function cleanupUnverifiedUsers() {
   }
 }
 
-//Run cleanup immediately on startup, then every 24 hours
+//Run cleanup immediately on startup, then every hour
 cleanupUnverifiedUsers();
 setInterval(cleanupUnverifiedUsers, CLEANUP_INTERVAL_MS);
 
