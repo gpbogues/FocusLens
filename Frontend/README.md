@@ -21,7 +21,7 @@ From the `Frontend/` directory:
 
 ```bash
 npm install      # install dependencies
-npm run dev      # start dev server (http://localhost:5174)
+npm run dev      # start dev server (http://localhost:5173)
 npm run build    # production build → dist/
 npm run preview  # preview the production build locally
 ```

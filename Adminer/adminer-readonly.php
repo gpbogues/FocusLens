@@ -1,13 +1,21 @@
 <?php
 //Adminer Read-Only (should be): for checking tables and values they hold
 
+//Docker on Windows can't memory-map .db-shm (needed for WAL coordination),
+//causing SQLITE_IOERR when opening the mounted file directly.
+//Fix: copy the main DB file to /tmp on every request (plain byte copy, no SQLite)
+//and redirect Adminer to use that snapshot instead.
+@copy('/db/focuslens.db', '/tmp/focuslens_snapshot.db');
+if (isset($_GET['db']))  $_GET['db']  = '/tmp/focuslens_snapshot.db';
+if (isset($_POST['db'])) $_POST['db'] = '/tmp/focuslens_snapshot.db';
+
 class AdminerReadOnly {
 
     //Block forbidden pages by redirecting away, http url related, 
     //kinda like preventing injections from search bar 
     function headers() {
         $blocked = ['sql', 'create', 'alter', 'drop', 'dump', 'import',
-                    'table', 'indexes', 'foreign', 'triggers', 'schema',
+                    'indexes', 'foreign', 'triggers', 'schema',
                     'sequence', 'type', 'procedure', 'event', 'user'];
 
         foreach ($blocked as $page) {

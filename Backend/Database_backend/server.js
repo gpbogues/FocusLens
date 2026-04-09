@@ -35,7 +35,7 @@ without external softwares to be downloaded
 
 const app = express();
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5174",
+  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
   credentials: true,
 }));
 app.use(cookieParser());
@@ -60,6 +60,9 @@ function issueAuthCookie(res, user) {
 const db = new Database(process.env.DB_PATH || "./focuslens.db");
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+db.pragma("cache_size = -8000");   //8 MB page cache (default ~2 MB)
+db.pragma("synchronous = NORMAL"); //safe with WAL, skips unnecessary fsyncs
+db.pragma("temp_store = MEMORY");  //keep temp tables (window functions) in memory
 
 //Initialize schema, CREATE TABLE IF NOT EXISTS is idempotent, safe to run every startup
 db.exec(`
@@ -106,6 +109,9 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_sessionchunk_userid
     ON SessionChunk(UserID);
+
+  CREATE INDEX IF NOT EXISTS idx_usersession_userid_lower_name
+    ON UserSession(UserID, LOWER(sessionName));
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
@@ -120,6 +126,14 @@ const s3 = new S3({
   region: process.env.AWS_REGION,
 });
 const USER_POOL_ID = process.env.USER_POOL_ID;
+
+//Cached prepared statements, compiled once at startup, reused on every request
+const stmtInsertSession = db.prepare(
+  "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)"
+);
+const stmtGetRecentSessions = db.prepare(
+  "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3"
+);
 
 //Looks up real cognito username via email filter before deleting,
 //as adminDeleteUser requires the pool username (a UUID) not the email alias,
@@ -150,14 +164,20 @@ app.get("/", (_req, res) => {
   res.send("Backend server is running");
 });
 
+//Dev only: flush WAL into main DB so Adminer snapshot is up to date
+if (process.env.NODE_ENV !== "production") {
+  app.post("/dev/checkpoint", (_req, res) => {
+    db.pragma("wal_checkpoint(FULL)");
+    res.json({ ok: true });
+  });
+}
+
 //UserSession API, saves user info into db after ending session
 //Note that avgFocus is set to 0, update when data could be fetched for it
 app.post("/session", async (req, res) => {
   const { userId, sessionStart, sessionEnd, sessionName, sessionDescription } = req.body;
   try {
-    db.prepare(
-      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription);
+    stmtInsertSession.run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -207,9 +227,7 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
 app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
-    const rows = db.prepare(
-      "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3"
-    ).all(userId);
+    const rows = stmtGetRecentSessions.all(userId);
     res.json({ success: true, sessions: rows });
   } catch (err) {
     console.error(err);
