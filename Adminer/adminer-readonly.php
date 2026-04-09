@@ -114,14 +114,37 @@ class AdminerReadOnly {
         margin-right: 8px;
         font-weight: bold;
     }
+
+    #checkpoint-btn {
+        background: #4f46e5;
+        color: white;
+        border: none;
+        padding: 2px 10px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 13px;
+        cursor: pointer;
+        margin-left: 12px;
+    }
+
+    #checkpoint-btn:hover { background: #4338ca; }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     var banner = document.createElement("div");
     banner.id = "readonly-banner";
-    banner.innerHTML = '<span>READ-ONLY</span> View table data only. All modifications are disabled.';
+    banner.innerHTML = '<span>READ-ONLY</span> View table data only. All modifications are disabled.'
+        + '<button id="checkpoint-btn" title="Flush WAL into DB then reload">&#8635; Sync</button>';
     document.body.insertBefore(banner, document.body.firstChild);
+
+    document.getElementById("checkpoint-btn").addEventListener("click", function () {
+        this.textContent = "Syncing...";
+        this.disabled = true;
+        fetch("http://localhost:5000/dev/checkpoint", { method: "POST" })
+            .then(function() { location.reload(); })
+            .catch(function() { alert("Checkpoint failed — is the backend running?"); });
+    });
 
     document.querySelectorAll('a[href*="table="]').forEach(function(el) {
         el.href = el.href.replace("table=", "select=");
