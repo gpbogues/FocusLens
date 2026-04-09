@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import './TopBar.css';
 
-const TopBar = () => {
+interface TopBarProps {
+  isSessionActive?: boolean;
+}
+
+const TopBar = ({ isSessionActive }: TopBarProps) => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,6 +49,14 @@ const TopBar = () => {
         <h1 className="top-bar-title" onClick={handleTitleClick}>
           FocusLens
         </h1>
+        <div className="top-bar-right">
+          {isSessionActive && (
+            <div className="session-indicator">
+              <span className="session-indicator-dot" />
+              <span className="session-indicator-label">Session Active</span>
+            </div>
+          )}
+        </div>
       </header>
       <Sidebar
         isOpen={isSidebarOpen}
