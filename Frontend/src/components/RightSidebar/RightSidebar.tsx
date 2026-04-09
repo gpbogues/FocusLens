@@ -6,6 +6,8 @@ import './RightSidebar.css';
 interface RightSidebarProps {
   isSessionActive: boolean;
   onToggleSession: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 //Format stored time to fit with sql timedate format
@@ -32,7 +34,7 @@ const toDefaultSessionName = () => {
   );
 };
 
-const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) => {
+const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleCollapse }: RightSidebarProps) => {
   const { user, notifySessionSaved } = useAuth();
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
@@ -122,23 +124,34 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
 
   return (
     <>
-      <aside className="right-sidebar">
-        <div className="webcam-container">
-          <WebcamFeed isActive={isSessionActive} />
+      <aside className={`right-sidebar${isCollapsed ? ' collapsed' : ''}`}>
+        <div className="sidebar-header">
+          <button
+            className="sidebar-collapse-btn"
+            onClick={onToggleCollapse}
+            title={isCollapsed ? 'Expand panel' : 'Collapse panel'}
+          >
+            {isCollapsed ? '←' : '→'}
+          </button>
         </div>
-        <button
-          className={`session-button ${isSessionActive ? 'stop' : 'start'}`}
-          onClick={handleToggleSession}
-        >
-          {isSessionActive ? 'Stop Session' : 'Start Session'}
-        </button>
-        <div className="session-info-box">
-          <span className="session-info-label">Session Start Time</span>
-          <span className="session-info-value">{sessionStart || '—'}</span>
-        </div>
-        <div className="session-info-box">
-          <span className="session-info-label">Session End Time</span>
-          <span className="session-info-value">{sessionEnd || '—'}</span>
+        <div className="sidebar-content">
+          <div className="webcam-container">
+            <WebcamFeed isActive={isSessionActive} />
+          </div>
+          <button
+            className={`session-button ${isSessionActive ? 'stop' : 'start'}`}
+            onClick={handleToggleSession}
+          >
+            {isSessionActive ? 'Stop Session' : 'Start Session'}
+          </button>
+          <div className="session-info-box">
+            <span className="session-info-label">Session Start Time</span>
+            <span className="session-info-value">{sessionStart || '—'}</span>
+          </div>
+          <div className="session-info-box">
+            <span className="session-info-label">Session End Time</span>
+            <span className="session-info-value">{sessionEnd || '—'}</span>
+          </div>
         </div>
       </aside>
 

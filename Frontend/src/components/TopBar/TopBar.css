@@ -74,3 +74,47 @@
 .top-bar-title:hover {
   color: var(--color-accent);
 }
+
+.top-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.session-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(255, 60, 60, 0.08);
+  border: 1px solid rgba(255, 60, 60, 0.25);
+}
+
+.session-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4444;
+  flex-shrink: 0;
+  animation: session-glow 2s ease-in-out infinite;
+}
+
+.session-indicator-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff6868;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+@keyframes session-glow {
+  0%, 100% {
+    box-shadow: 0 0 3px 1px rgba(255, 60, 60, 0.6);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 10px 5px rgba(255, 60, 60, 0.25);
+    opacity: 0.8;
+  }
+}

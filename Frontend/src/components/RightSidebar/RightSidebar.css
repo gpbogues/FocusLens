@@ -4,8 +4,63 @@
   border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  gap: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.right-sidebar.collapsed {
+  width: 44px;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 8px 4px;
+  flex-shrink: 0;
+}
+
+.right-sidebar.collapsed .sidebar-header {
+  justify-content: center;
+}
+
+.sidebar-collapse-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 20px 20px;
   gap: 20px;
+  min-width: 280px;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+.right-sidebar.collapsed .sidebar-content {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .webcam-container {
