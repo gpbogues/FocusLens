@@ -181,6 +181,30 @@
   line-height: 1.5;
 }
 
+/* Skeleton loading state */
+.session-card-skeleton {
+  pointer-events: none;
+}
+
+.session-skeleton-header {
+  height: 52px;
+  margin: 0;
+  border-radius: 0;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 50%,
+    var(--color-bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
 /* Pagination (page selection) */
 .sessions-pagination {
   display: flex;

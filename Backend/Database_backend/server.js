@@ -147,7 +147,7 @@ async function deleteCognitoUserByEmail(email) {
 })();
 
 //Used for testing if backend server is online
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.send("Backend server is running");
 });
 
@@ -186,18 +186,19 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
 
   try {
     const searchParam = `%${search.toLowerCase()}%`;
+    //COUNT(*) OVER() is a window function computed before LIMIT/OFFSET, so it reflects the
+    //full matching row count, eliminating the need for a separate COUNT query
+    //tldr, one query instead of two for sesssions page
     const [rows] = await db.execute(
-      `SELECT sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus
+      `SELECT sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus,
+              COUNT(*) OVER() AS total
        FROM UserSession
        WHERE UserID = ? AND LOWER(sessionName) LIKE ?
        ORDER BY ${orderExpr} ${sortDir}
        LIMIT ${limit} OFFSET ${offset}`,
       [userId, searchParam]
     );
-    const [[{ total }]] = await db.execute(
-      `SELECT COUNT(*) AS total FROM UserSession WHERE UserID = ? AND LOWER(sessionName) LIKE ?`,
-      [userId, searchParam]
-    );
+    const total = rows.length > 0 ? Number(rows[0].total) : 0;
     res.json({ success: true, sessions: rows, total });
   } catch (err) {
     console.error(err);

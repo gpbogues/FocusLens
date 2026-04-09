@@ -64,6 +64,7 @@ const Sessions = () => {
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortDir, setSortDir] = useState<SortDir>('DESC');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   //Debounce search input, reduce API calls by only setting search state 350ms after user stops typing
   useEffect(() => {
@@ -77,6 +78,7 @@ const Sessions = () => {
   //Fetch sessions
   useEffect(() => {
     if (!user) return;
+    setIsLoading(true);
     const params = new URLSearchParams({
       page: String(page),
       limit: String(LIMIT),
@@ -84,7 +86,7 @@ const Sessions = () => {
       sortDir,
       search,
     });
-    fetch(`${API_URL}/sessions/paginated/${user.userId}?${params}`)
+    fetch(`${API_URL}/sessions/paginated/${user.userId}?${params}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
@@ -92,7 +94,8 @@ const Sessions = () => {
           setTotal(data.total);
         }
       })
-      .catch(err => console.error('Sessions fetch error:', err));
+      .catch(err => console.error('Sessions fetch error:', err))
+      .finally(() => setIsLoading(false));
   }, [user, page, search, sortBy, sortDir, sessionTrigger]);
 
   const handleSort = (field: SortBy) => {
@@ -146,7 +149,13 @@ const Sessions = () => {
       </div>
 
       <div className="sessions-list">
-        {sessions.length === 0 ? (
+        {isLoading ? (
+          Array.from({ length: LIMIT }, (_, i) => (
+            <div key={i} className="session-card session-card-skeleton">
+              <div className="session-skeleton-header" />
+            </div>
+          ))
+        ) : sessions.length === 0 ? (
           <p className="no-sessions">No sessions found.</p>
         ) : (
           sessions.map((session, i) => {
