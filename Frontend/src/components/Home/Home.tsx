@@ -56,7 +56,7 @@ const Home = () => {
     console.log('Home: fetching sessions, sessionTrigger:', sessionTrigger);
     const fetchSessions = async () => {
       try {
-        const res = await fetch(`${API_URL}/sessions/${user.userId}`);
+        const res = await fetch(`${API_URL}/sessions/${user.userId}`, { credentials: 'include' });
         const data = await res.json();
         console.log('Home: sessions fetched:', data);
         if (data.success) {

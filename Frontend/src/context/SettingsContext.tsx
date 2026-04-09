@@ -17,7 +17,7 @@ const SettingsContext = createContext<SettingsContextType | null>(null);
 const API_URL = import.meta.env.VITE_API_URL;
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
+  const { user, initialSettings } = useAuth();
   const userId = user?.userId;
 
   const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
@@ -25,29 +25,38 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [micEnabled, setMicEnabledState] = useState<boolean>(false);
   const [avatarId, setAvatarIdState] = useState<string>('fox');
 
-  // Track whether initial settings have been loaded for this user
+  //Track whether initial settings have been loaded for this user
   const loadedForUser = useRef<number | undefined>(undefined);
 
-  // When the logged-in user changes, fetch their settings from the DB
+  //When the logged-in user changes, apply settings — from /init prefetch if available, else fetch
   useEffect(() => {
     if (!userId) return;
     if (loadedForUser.current === userId) return;
     loadedForUser.current = userId;
 
-    fetch(`${API_URL}/user/settings`, { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setIsDarkModeState(data.isDarkMode);
-          setCameraEnabledState(data.cameraEnabled);
-          setMicEnabledState(data.micEnabled);
-          setAvatarIdState(data.avatarId);
-        }
-      })
-      .catch(() => {});
-  }, [userId]);
+    if (initialSettings) {
+      //Settings arrived with /init, no extra round-trip needed
+      setIsDarkModeState(initialSettings.isDarkMode);
+      setCameraEnabledState(initialSettings.cameraEnabled);
+      setMicEnabledState(initialSettings.micEnabled);
+      setAvatarIdState(initialSettings.avatarId);
+    } else {
+      //Fallback: fetch separately (should rarely happen)
+      fetch(`${API_URL}/user/settings`, { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setIsDarkModeState(data.isDarkMode);
+            setCameraEnabledState(data.cameraEnabled);
+            setMicEnabledState(data.micEnabled);
+            setAvatarIdState(data.avatarId);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [userId, initialSettings]);
 
-  // When user logs out, reset to defaults and clear the loaded marker
+  //When user logs out, reset to defaults and clear the loaded marker
   useEffect(() => {
     if (!userId) {
       loadedForUser.current = undefined;
@@ -58,7 +67,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [userId]);
 
-  // Apply dark/light theme to DOM whenever isDarkMode changes
+  //Apply dark/light theme to DOM whenever isDarkMode changes
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);

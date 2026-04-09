@@ -14,14 +14,14 @@ import { SettingsProvider } from './context/SettingsContext'
 //Returns null while the /me cookie check is in-flight to prevent flash-redirect on hard refresh
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
-  if (isLoading) return null
+  if (isLoading) return <div className="app-loading-spinner" />
   return user ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 //Redirects to / if user is already logged in
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
-  if (isLoading) return null
+  if (isLoading) return <div className="app-loading-spinner" />
   return user ? <Navigate to="/" replace /> : <>{children}</>
 }
 

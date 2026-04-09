@@ -22,6 +22,9 @@ CREATE TABLE UserSession
         sessionDescription TEXT NULL
     );
 ALTER TABLE UserSession ADD CONSTRAINT UserSession_UserIDfk FOREIGN KEY (UserID) REFERENCES UserData (UserID) ON DELETE CASCADE;
+-- Index required: MySQL does not auto-create indexes for foreign keys.
+-- Without this, every /sessions/:userId query does a full table scan.
+CREATE INDEX idx_usersession_userid_start ON UserSession (UserID, sessionStart DESC);
 
 CREATE TABLE SessionChunk
 	(	ChunkId int auto_increment NOT NULL Primary KEY,
