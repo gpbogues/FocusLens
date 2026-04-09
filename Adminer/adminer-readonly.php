@@ -159,4 +159,9 @@ function adminer_object() {
     return new AdminerPlugin([new AdminerReadOnly()]);
 }
 
+//Allow passwordless SQLite login
+function adminer_login($login, $password) {
+    return true;
+}
+
 include "./adminer.php";
