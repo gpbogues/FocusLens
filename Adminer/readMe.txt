@@ -6,10 +6,9 @@ To run:
 
 Login:
     needed info are within .env file of backend -> database_backend folder
-    Server = /db/focuslens.db
     Username = (empty)
     Password = (empty)
-    Database = DB_NAME (from .env)
+    Database = /db/focuslens.db
 
 Also try to only interact with the left side buttons, such as 'select' and table names like 'UserData',
 I made this as a table viewer and tried to restrict functionality,
