@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 interface User {
@@ -10,51 +10,62 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (user: User) => void;
-  logout: () => void;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
-  sessionTrigger: number;           //help track when a new session is saved
-  notifySessionSaved: () => void;   //called by RightSidebar after a session saves
+  isLoading: boolean;
+  sessionTrigger: number;
+  notifySessionSaved: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    //fix, where refreshing page will no wipe user info,
-    //tldr, prevent page refresh from logging out user 
-    const stored = localStorage.getItem('user');
-    return stored ? JSON.parse(stored) : null;
-  });
-
-  //Increments by 1 each time a session is saved, Home.tsx watches this value for updating snapshot
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [sessionTrigger, setSessionTrigger] = useState(0);
 
-  //login stores user info in both state
-  const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));  
+  // On mount, check the httpOnly cookie via /me to rehydrate session
+  useEffect(() => {
+    fetch(`${API_URL}/me`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setUser({ username: data.username, email: data.email, userId: data.userId, avatarUrl: data.avatarUrl ?? null });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  // Called after /login succeeds — backend already set the cookie, so just fetch /me
+  const login = async () => {
+    const res = await fetch(`${API_URL}/me`, { credentials: 'include' });
+    const data = await res.json();
+    if (data.success) {
+      setUser({ username: data.username, email: data.email, userId: data.userId, avatarUrl: data.avatarUrl ?? null });
+    }
   };
 
-  const logout = () => {
+  // Clears the cookie server-side then wipes local state
+  const logout = async () => {
+    await fetch(`${API_URL}/logout`, { method: 'POST', credentials: 'include' });
     setUser(null);
-    localStorage.removeItem('user');  
   };
 
-  //Updates user fields in context and localStorage
-   const updateUser = (updates: Partial<User>) => {
+  // Updates user fields in context only (no localStorage — cookie holds the token)
+  const updateUser = (updates: Partial<User>) => {
     setUser(prev => {
       if (!prev) return prev;
-      const updated = { ...prev, ...updates };
-      localStorage.setItem('user', JSON.stringify(updated));
-      return updated;
+      return { ...prev, ...updates };
     });
   };
 
   const notifySessionSaved = () => setSessionTrigger(prev => prev + 1);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, sessionTrigger, notifySessionSaved }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved }}>
       {children}
     </AuthContext.Provider>
   );
@@ -65,19 +76,3 @@ export const useAuth = () => {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 };
-
-/*
-SebGu Notes:
-this file is basically a bucket, bucket has stored values to be pulled from,
-example, after login, profile section will contain username and email info via,
-
-interface User {
-  username: string;
-  email: string;
-}
-
-meaning any info that needs to be used, for context or any-else, can be stored here,
-to be more specific, its user identification info that are stored here 
-
-this info is also logged by f12 console, login data from login.tsx 
-*/

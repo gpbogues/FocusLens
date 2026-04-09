@@ -3,6 +3,8 @@ import mysql from "mysql2/promise";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import cors from "cors";
+import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
 import pkg from "aws-sdk";
 const { CognitoIdentityServiceProvider, S3, config: awsConfig } = pkg;
 
@@ -31,8 +33,27 @@ without external softwares to be downloaded
 
 dotenv.config();
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+  credentials: true,
+}));
+app.use(cookieParser());
 app.use(express.json());
+
+//Issues a signed JWT as an httpOnly cookie
+function issueAuthCookie(res, user) {
+  const token = jwt.sign(
+    { userId: user.UserID, username: user.uName, email: user.uEmail, avatarUrl: user.avatarUrl ?? null },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
 
 //MySQL pool, injects connection info from .env file to establish connection with RDS instance
 const db = mysql.createPool({
@@ -262,14 +283,67 @@ app.post("/login", async (req, res) => {
 
     //note that since user info are unique, rows[0] is the only row,
     //and it represents said users info
-    res.json({ success: true,
-               username: user.uName,
-               email: user.uEmail,
-               userId: user.UserID,
-               avatarUrl: user.avatarUrl ?? null });
+    issueAuthCookie(res, user);
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "server.js: Login error" });
+  }
+});
+
+//Returns user data from the JWT cookie — used by frontend on app init to rehydrate session
+app.get("/me", (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ success: false });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ success: true, userId: decoded.userId, username: decoded.username, email: decoded.email, avatarUrl: decoded.avatarUrl });
+  } catch {
+    res.status(401).json({ success: false, message: "Invalid or expired token" });
+  }
+});
+
+//Clears the auth cookie to log the user out
+app.post("/logout", (_req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
+  res.json({ success: true });
+});
+
+//Returns the user's settings from the DB
+app.get("/user/settings", async (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ success: false });
+  try {
+    const { userId } = jwt.verify(token, process.env.JWT_SECRET);
+    const [rows] = await db.execute(
+      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?",
+      [userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ success: false });
+    res.json({ success: true, ...rows[0] });
+  } catch {
+    res.status(401).json({ success: false });
+  }
+});
+
+//Saves the user's settings to the DB
+app.put("/user/settings", async (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ success: false });
+  try {
+    const { userId } = jwt.verify(token, process.env.JWT_SECRET);
+    const { isDarkMode, cameraEnabled, micEnabled, avatarId } = req.body;
+    await db.execute(
+      "UPDATE UserData SET isDarkMode=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?",
+      [isDarkMode, cameraEnabled, micEnabled, avatarId, userId]
+    );
+    res.json({ success: true });
+  } catch {
+    res.status(401).json({ success: false });
   }
 });
 
@@ -281,6 +355,9 @@ app.put("/user/username", async (req, res) => {
       "UPDATE UserData SET uName = ? WHERE UserID = ?",
       [newUsername, userId]
     );
+    // Re-issue JWT so the new username is reflected immediately on refresh
+    const [rows] = await db.execute("SELECT * FROM UserData WHERE UserID = ?", [userId]);
+    if (rows.length > 0) issueAuthCookie(res, rows[0]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -462,6 +539,9 @@ app.put("/user/avatar", async (req, res) => {
       console.log(`server.js: Deleted old avatar from S3: ${oldKey}`);
     }
 
+    // Re-issue JWT so the new avatarUrl is reflected immediately on refresh
+    const [updatedRows] = await db.execute("SELECT * FROM UserData WHERE UserID = ?", [userId]);
+    if (updatedRows.length > 0) issueAuthCookie(res, updatedRows[0]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

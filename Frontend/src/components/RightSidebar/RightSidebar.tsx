@@ -46,7 +46,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession }: RightSidebarProps) =
 
   const handleToggleSession = async () => {
     if (!isSessionActive) {
-      //Starting session
+      //Starting session: create session in RDS, get sessionId, tell dmb.py
       const startTime = toMySQLDateTime();
       setSessionStart(startTime);
       setSessionEnd('');

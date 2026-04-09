@@ -8,16 +8,6 @@ import {
   cognitoResendCode,
 } from "./cognitoAuth";
 
-/* 
-Bug:
-happened once but upon start of web app,
-login/register page and logout are gone,
-user profile also contained no info,
-
-fix was to load a seperate branch that didn't contain most recent login changes,
-this could be related to local/session storage, and clearing that out
-*/
-
 //NOTE: 
 //this got reverted to the state prior to logout button implementation,
 //as login/register sidebar buttons are removed with login form being independent and presented at the start 
@@ -229,25 +219,20 @@ function Login() {
         return;
       }
 
-      //Login: RDS only, blocks unverified users 
-      //Calls backend login API 
+      //Login: RDS only, blocks unverified users
+      //Calls backend login API
       const res = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
 
-      //This sections works with AuthContext to store user info globally 
+      //This sections works with AuthContext to store user info globally
       if (data.success) {
-        //used for f12 console 
-        console.log('login data:', data);
-        login({                
-          username: data.username,
-          email: data.email,
-          userId: data.userId,
-          avatarUrl: data.avatarUrl ?? null,
-        });
+        //Backend set the httpOnly cookie; fetch /me to load user into context
+        await login();
 
         //Scale out the login box before navigating to home
         const el = document.querySelector('.login-box') as HTMLElement | null;

@@ -1,60 +1,52 @@
 """
-The team connects React via /api/status and /api/video_feed
-and MySQL via the save_to_db() function.
- 
+The team connects React via /api/status and /api/video_feed.
+Session context is received via /api/session (POST) when the user starts a session.
+Every 5 active minutes (or on early stop via /api/session/end), a chunk is POSTed
+to the Node.js backend which writes it to AWS RDS SessionChunk.
+
 Install requirements:
-pip install flask flask-cors opencv-python mediapipe joblib numpy mysql-connector-python
+pip install flask flask-cors opencv-python mediapipe joblib numpy requests
 """
- 
+
 import time
 import threading
 import joblib
 import numpy as np
 import cv2
 import mediapipe as mp
-import mysql.connector
+import requests
 from datetime import datetime
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
  
 app = Flask(__name__)
 CORS(app)  # Allows React to communicate with the API
- 
- 
-# ⚙️  MySQL Settings 
-DB_CONFIG = {
-    "host":     "localhost",
-    "user":     "root",
-    "password": "YOUR_PASSWORD",   # <- edit
-    "database": "YOUR_DB_NAME",    # <- edit
-}
- 
-def save_to_db(status_text, label, avg_ear, distraction_ratio, active_seconds):
-    """
-    Called every 5 active minutes — same timing as the original save_to_report().
-    Team can edit the table name and columns to match their own schema.
-    """
+
+# Node.js backend URL — chunks are POSTed here
+NODE_API_URL = "http://localhost:3000"
+
+# Active session context — set by frontend when session starts
+_session_ctx = {"userId": None, "sessionId": None}
+
+# Signal from /api/session/end to trigger an early save
+_force_save_event = threading.Event()
+
+def save_chunk_via_api(label):
+    """POSTs a focus chunk to the Node.js backend (called every 5 min or on early stop)."""
+    chunk_map = {3: "VF", 2: "SF", 1: "SU", 0: "VU"}
+    chunk_status = chunk_map.get(label, "SU")
+    if _session_ctx["sessionId"] is None:
+        print("[API] No active session — chunk not saved")
+        return
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO focus_sessions
-                (timestamp, label, status, avg_ear, distraction_ratio, active_seconds)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (
-            datetime.now(),
-            label,
-            status_text,
-            round(float(avg_ear), 4),
-            round(float(distraction_ratio), 4),
-            int(active_seconds),
-        ))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print(f"[DB] Saved -> {status_text} | ratio={distraction_ratio:.2%}")
+        resp = requests.post(f"{NODE_API_URL}/session/chunk", json={
+            "sessionId":   _session_ctx["sessionId"],
+            "userId":      _session_ctx["userId"],
+            "chunkStatus": chunk_status,
+        }, timeout=5)
+        print(f"[API] Chunk saved → {chunk_status} ({resp.status_code})")
     except Exception as e:
-        print(f"[DB ERROR] {e}")
+        print(f"[API ERROR] {e}")
  
  
 #   Shared State — React reads this via /api/status
@@ -142,14 +134,8 @@ def focus_engine():
             else:
                 status_text = daisee_map.get(prediction, "Unknown")
  
-            # Save to MySQL 
-            save_to_db(
-                status_text       = status_text,
-                label             = prediction,
-                avg_ear           = avg_features[0],
-                distraction_ratio = distraction_ratio,
-                active_seconds    = active_session_time,
-            )
+            # POST chunk to Node.js backend
+            save_chunk_via_api(label=prediction)
  
             live_state["last_report"] = {
                 "time":              datetime.now().strftime("%I:%M:%S %p"),
@@ -260,8 +246,9 @@ def focus_engine():
             live_state["remaining_seconds"] = max(0, int(SAVE_INTERVAL - active_session_time))
             distraction_start_time          = None
  
-        # Check 300 active seconds 
-        if active_session_time >= SAVE_INTERVAL:
+        # Check 300 active seconds OR early-end signal from frontend
+        if active_session_time >= SAVE_INTERVAL or _force_save_event.is_set():
+            _force_save_event.clear()
             save_report()
  
         # Encode frame for stream
@@ -271,8 +258,35 @@ def focus_engine():
     cap.release()
  
  
-#   API Endpoints —  call these from frontend 
- 
+#   API Endpoints — call these from frontend
+
+@app.route("/api/session", methods=["POST"])
+def set_session():
+    """
+    Called by the frontend when a session starts.
+    Body: { userId, sessionId }
+    """
+    data = request.get_json()
+    _session_ctx["userId"]    = data.get("userId")
+    _session_ctx["sessionId"] = data.get("sessionId")
+    print(f"[SESSION] Started — userId={_session_ctx['userId']} sessionId={_session_ctx['sessionId']}")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/session/end", methods=["POST"])
+def end_session():
+    """
+    Called by the frontend when the session stops (including early stop < 5 min).
+    Signals the engine thread to flush buffered data immediately, then clears session context.
+    """
+    _force_save_event.set()
+    time.sleep(0.5)  # give engine thread one frame cycle to process the flush
+    _session_ctx["userId"]    = None
+    _session_ctx["sessionId"] = None
+    print("[SESSION] Ended — context cleared")
+    return jsonify({"ok": True})
+
+
 @app.route("/api/status")
 def api_status():
     """
