@@ -191,8 +191,8 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
        FROM UserSession
        WHERE UserID = ? AND LOWER(sessionName) LIKE ?
        ORDER BY ${orderExpr} ${sortDir}
-       LIMIT ? OFFSET ?`,
-      [userId, searchParam, limit, offset]
+       LIMIT ${limit} OFFSET ${offset}`,
+      [userId, searchParam]
     );
     const [[{ total }]] = await db.execute(
       `SELECT COUNT(*) AS total FROM UserSession WHERE UserID = ? AND LOWER(sessionName) LIKE ?`,
