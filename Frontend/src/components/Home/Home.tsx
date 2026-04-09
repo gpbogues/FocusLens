@@ -8,11 +8,14 @@ interface Session {
 }
 
 //Calculates total session time from start and end strings
-const calcTotalDuration = (start: string, end: string): string => {
+const calcTotalDuration = (start: string, end: string | null | undefined): string => {
+  if (!end) return 'In progress';
   const toSeconds = (str: string) => {
-    const [datePart, timePart] = str.split('T');             
+    const normalized = str.replace(' ', 'T');
+    const [datePart, timePart] = normalized.split('T');
+    if (!timePart) return 0;
     const [year, month, day] = datePart.split('-').map(Number);
-    const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);  
+    const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);
     return new Date(year, month - 1, day, hours, minutes, seconds).getTime() / 1000;
   };
 
@@ -27,10 +30,14 @@ const calcTotalDuration = (start: string, end: string): string => {
 };
 
 //Formats datetime (how its stored within mysql) into separate date and time display values
-const formatDateTime = (dateStr: string) => {
-  const [datePart, timePart] = dateStr.split('T');          
+const formatDateTime = (dateStr: string | null | undefined) => {
+  if (!dateStr) return { date: '—', time: '—' };
+  // SQLite returns 'YYYY-MM-DD HH:MM:SS' (space), normalize to 'T' for consistent splitting
+  const normalized = dateStr.replace(' ', 'T');
+  const [datePart, timePart] = normalized.split('T');
+  if (!timePart) return { date: datePart, time: '—' };
   const [year, month, day] = datePart.split('-');
-  const [hours, minutes, seconds] = timePart.split('.')[0].split(':');  
+  const [hours, minutes, seconds] = timePart.split('.')[0].split(':');
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];

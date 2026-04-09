@@ -351,17 +351,16 @@ app.get("/user/settings", async (req, res) => {
 
 //Saves the user's settings to the DB
 app.put("/user/settings", async (req, res) => {
-  const token = req.cookies?.token;
-  if (!token) return res.status(401).json({ success: false });
+  const { userId, isDarkMode, cameraEnabled, micEnabled, avatarId } = req.body;
+  if (!userId) return res.status(400).json({ success: false, message: "userId required" });
   try {
-    const { userId } = jwt.verify(token, process.env.JWT_SECRET);
-    const { isDarkMode, cameraEnabled, micEnabled, avatarId } = req.body;
     db.prepare(
       "UPDATE UserData SET isDarkMode=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?"
     ).run(isDarkMode, cameraEnabled, micEnabled, avatarId, userId);
     res.json({ success: true });
-  } catch {
-    res.status(401).json({ success: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to save settings" });
   }
 });
 
