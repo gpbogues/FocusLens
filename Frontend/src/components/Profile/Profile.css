@@ -474,11 +474,11 @@
   font-size: 12px;
 }
 
-.req-met {
+.modal-requirements .req-met {
   color: var(--color-success);
 }
 
-.req-unmet {
+.modal-requirements .req-unmet {
   color: var(--color-text-muted);
 }
 

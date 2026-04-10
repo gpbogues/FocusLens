@@ -16,36 +16,45 @@
 
 .sidebar-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 10px 8px 4px;
   flex-shrink: 0;
 }
 
-.right-sidebar.collapsed .sidebar-header {
-  justify-content: center;
-}
-
 .sidebar-collapse-btn {
-  width: 32px;
-  height: 32px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-primary);
-  font-size: 16px;
-  line-height: 1;
   flex-shrink: 0;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  transition: background 0.2s, color 0.2s;
+  padding: 0;
 }
 
 .sidebar-collapse-btn:hover {
   background: var(--color-bg-hover);
-  border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.collapse-chevron {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-right: 2.5px solid currentColor;
+  border-top: 2.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.collapse-chevron.flipped {
+  transform: rotate(-135deg);
 }
 
 .sidebar-content {
