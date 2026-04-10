@@ -131,7 +131,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
             onClick={onToggleCollapse}
             title={isCollapsed ? 'Expand panel' : 'Collapse panel'}
           >
-            {isCollapsed ? '←' : '→'}
+            <span className={`collapse-chevron${isCollapsed ? ' flipped' : ''}`} />
           </button>
         </div>
         <div className="sidebar-content">
