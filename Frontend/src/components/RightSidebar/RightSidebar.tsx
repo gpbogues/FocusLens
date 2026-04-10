@@ -35,7 +35,7 @@ const toDefaultSessionName = () => {
 };
 
 const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleCollapse }: RightSidebarProps) => {
-  const { user, notifySessionSaved } = useAuth();
+  const { user, notifySessionSaved, highlightSession, clearHighlightSession } = useAuth();
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
   const [saveModal, setSaveModal] = useState<'confirm' | 'details' | null>(null);
@@ -44,6 +44,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
   //Holds the captured end time and default name while modal is open
   const [pendingEndTime, setPendingEndTime] = useState<string>('');
   const [defaultName, setDefaultName] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
   const handleToggleSession = async () => {
@@ -86,6 +87,9 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
 
   //Modal 2: user confirmed = POST session to backend
   const handleDetailsConfirm = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+
     const name = sessionName.trim() || defaultName;
     const description = sessionDescription.trim() || 'No Description';
 
@@ -119,6 +123,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
       console.error('Failed to save session:', err);
     }
 
+    setIsSaving(false);
     setSaveModal(null);
   };
 
@@ -139,8 +144,9 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
             <WebcamFeed isActive={isSessionActive} />
           </div>
           <button
-            className={`session-button ${isSessionActive ? 'stop' : 'start'}`}
+            className={`session-button ${isSessionActive ? 'stop' : 'start'}${highlightSession && !isSessionActive ? ' highlight-pulse' : ''}`}
             onClick={handleToggleSession}
+            onAnimationEnd={() => { if (highlightSession) clearHighlightSession(); }}
           >
             {isSessionActive ? 'Stop Session' : 'Start Session'}
           </button>
@@ -191,7 +197,9 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
             />
             <div className="modal-actions">
               <button className="modal-cancel" onClick={handleDetailsCancel}>Cancel</button>
-              <button className="modal-save" onClick={handleDetailsConfirm}>Confirm</button>
+              <button className="modal-save" onClick={handleDetailsConfirm} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Confirm'}
+              </button>
             </div>
           </div>
         </div>
