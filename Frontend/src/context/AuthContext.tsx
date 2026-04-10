@@ -32,6 +32,9 @@ interface AuthContextType {
   sessionTrigger: number;
   notifySessionSaved: () => void;
   initialSettings: InitialSettings | null;
+  highlightSession: boolean;
+  requestHighlightSession: () => void;
+  clearHighlightSession: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -42,6 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionTrigger, setSessionTrigger] = useState(0);
   const [initialSettings, setInitialSettings] = useState<InitialSettings | null>(null);
+  const [highlightSession, setHighlightSession] = useState(false);
 
   //On mount, call /init to repopulates session and prefetch settings in one round-trip
   useEffect(() => {
@@ -81,9 +85,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const notifySessionSaved = () => setSessionTrigger(prev => prev + 1);
+  const requestHighlightSession = () => setHighlightSession(true);
+  const clearHighlightSession = () => setHighlightSession(false);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved, initialSettings }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved, initialSettings, highlightSession, requestHighlightSession, clearHighlightSession }}>
       {children}
     </AuthContext.Provider>
   );

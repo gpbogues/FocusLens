@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import AgentPrompt from './AgentPrompt';
 import './Home.css';
 
 interface Session {
@@ -52,12 +53,20 @@ const formatDateTime = (dateStr: string | null | undefined) => {
   };
 };
 
+const DRAWER_HEIGHT = 380;
+const HANDLE_HEIGHT = 48;
+
 const Home = () => {
   const { user, sessionTrigger } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [animKey, setAnimKey] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ startY: number; wasOpen: boolean } | null>(null);
   const API_URL = import.meta.env.VITE_API_URL;
 
-  //Fetches 3 most recent sessions when user is logged in
+  //Fetches most recent sessions when user is logged in
   useEffect(() => {
     if (!user) return;
     console.log('Home: fetching sessions, sessionTrigger:', sessionTrigger);
@@ -68,6 +77,7 @@ const Home = () => {
         console.log('Home: sessions fetched:', data);
         if (data.success) {
           setSessions(data.sessions);
+          setAnimKey(k => k + 1);
         }
       } catch (err) {
         console.error('Failed to fetch sessions:', err);
@@ -76,43 +86,98 @@ const Home = () => {
     fetchSessions();
   }, [user, sessionTrigger]);
 
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragState.current = { startY: e.clientY, wasOpen: drawerOpen };
+    drawerRef.current?.classList.add('dragging');
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragState.current) return;
+    const delta = e.clientY - dragState.current.startY;
+    const maxDown = dragState.current.wasOpen ? DRAWER_HEIGHT - HANDLE_HEIGHT : 0;
+    const maxUp = dragState.current.wasOpen ? 0 : -(DRAWER_HEIGHT - HANDLE_HEIGHT);
+    setDragOffset(Math.max(maxUp, Math.min(maxDown, delta)));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragState.current) return;
+    const delta = e.clientY - dragState.current.startY;
+    drawerRef.current?.classList.remove('dragging');
+    if (Math.abs(delta) < 8) {
+      setDrawerOpen(o => {
+        if (!o) setAnimKey(k => k + 1);
+        return !o;
+      });
+    } else {
+      const next = delta < -40 ? true : delta > 40 ? false : dragState.current.wasOpen;
+      if (next && !dragState.current.wasOpen) setAnimKey(k => k + 1);
+      setDrawerOpen(next);
+    }
+    setDragOffset(0);
+    dragState.current = null;
+  };
+
   return (
     <div className="home-page">
-      <h2 className="page-heading">Session Snapshots</h2>
-      {/* Only render snapshots if user is logged in */}
+      <div className="home-main-content">
+        <AgentPrompt />
+      </div>
+
       {user && (
-        <div className="snapshots-container">
-          {/* Ternary operation where available sessions are checked to see if any exist */}
-          {sessions.length === 0 ? (
-            <p className="no-sessions">No sessions recorded yet.</p>
-          ) : (
-            sessions.map((session, animationKey) => {
-            const start = formatDateTime(session.sessionStart);
-            const end = formatDateTime(session.sessionEnd);
-            const duration = calcTotalDuration(session.sessionStart, session.sessionEnd);
-            return (
-              <div className="snapshot-card" key={`${animationKey}-${session.sessionStart}`}>
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">Date</span>
-                    <span className="snapshot-value">{start.date}</span>
-                  </div>
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">Start Time</span>
-                    <span className="snapshot-value">{start.time}</span>
-                  </div>
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">End Time</span>
-                    <span className="snapshot-value">{end.time}</span>
-                  </div>
-                  <div className="snapshot-divider" />
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">Duration</span>
-                    <span className="snapshot-value snapshot-duration">{duration}</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
+        <div
+          className={`session-drawer${drawerOpen ? ' open' : ''}`}
+          ref={drawerRef}
+          style={{ '--drag-offset': `${dragOffset}px` } as React.CSSProperties}
+        >
+          <div
+            className="drawer-handle-bar"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            <div className="drawer-pill" />
+            <span className="drawer-tab-label">Session Snapshots</span>
+          </div>
+
+          <div className="drawer-content">
+            {sessions.length === 0 ? (
+              <p className="no-sessions">No sessions recorded yet.</p>
+            ) : (
+              <div className="sessions-grid" key={animKey}>
+                {sessions.map((session, animationKey) => {
+                  const start = formatDateTime(session.sessionStart);
+                  const end = formatDateTime(session.sessionEnd);
+                  const duration = calcTotalDuration(session.sessionStart, session.sessionEnd);
+                  return (
+                    <div
+                      className="snapshot-card"
+                      key={`${animationKey}-${session.sessionStart}`}
+                      style={{ animationDelay: `${animationKey * 60}ms` }}
+                    >
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">Date</span>
+                        <span className="snapshot-value">{start.date}</span>
+                      </div>
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">Start Time</span>
+                        <span className="snapshot-value">{start.time}</span>
+                      </div>
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">End Time</span>
+                        <span className="snapshot-value">{end.time}</span>
+                      </div>
+                      <div className="snapshot-divider" />
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">Duration</span>
+                        <span className="snapshot-value snapshot-duration">{duration}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
