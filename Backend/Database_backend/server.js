@@ -85,6 +85,7 @@ db.exec(`
     UserID             INTEGER NOT NULL,
     sessionStart       TEXT NOT NULL DEFAULT (datetime('now')),
     sessionEnd         TEXT NOT NULL DEFAULT (datetime('now')),
+    activeDuration INTEGER NOT NULL DEFAULT 0,
     avgFocus           REAL NOT NULL,
     sessionName        TEXT NOT NULL DEFAULT '',
     sessionDescription TEXT NULL,
@@ -129,10 +130,10 @@ const USER_POOL_ID = process.env.USER_POOL_ID;
 
 //Cached prepared statements, compiled once at startup, reused on every request
 const stmtInsertSession = db.prepare(
-  "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription) VALUES (?, ?, ?, ?, ?, ?)"
+  "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration) VALUES (?, ?, ?, ?, ?, ?, ?)"
 );
 const stmtGetRecentSessions = db.prepare(
-  "SELECT sessionStart, sessionEnd, sessionName, sessionDescription FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3"
+  "SELECT sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3"
 );
 
 //Looks up real cognito username via email filter before deleting,
@@ -175,9 +176,9 @@ if (process.env.NODE_ENV !== "production") {
 //UserSession API, saves user info into db after ending session
 //Note that avgFocus is set to 0, update when data could be fetched for it
 app.post("/session", async (req, res) => {
-  const { userId, sessionStart, sessionEnd, sessionName, sessionDescription } = req.body;
+  const { userId, sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration } = req.body;
   try {
-    stmtInsertSession.run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription);
+    stmtInsertSession.run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription, activeDuration ?? 0);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -197,7 +198,7 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
   // Whitelist to prevent SQL injection (column names can't be parameterized)
   const sortByMap = {
     date:     'sessionStart',
-    duration: "(strftime('%s', sessionEnd) - strftime('%s', sessionStart))",
+    duration: 'activeDuration',
     avgFocus: 'avgFocus',
   };
   const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
@@ -208,7 +209,7 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
     //full matching row count, eliminating the need for a separate COUNT query
     //tldr, one query instead of two for sesssions page
     const rows = db.prepare(
-      `SELECT SessionID, sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus,
+      `SELECT SessionID, sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus, activeDuration,
               COUNT(*) OVER() AS total
        FROM UserSession
        WHERE UserID = ? AND LOWER(sessionName) LIKE ?
