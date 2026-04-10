@@ -7,14 +7,16 @@ import './Layout.css';
 interface LayoutProps {
   isSessionActive: boolean;
   onToggleSession: () => void;
+  isPaused: boolean;
+  onPauseSession: () => void;
 }
 
-const Layout = ({ isSessionActive, onToggleSession }: LayoutProps) => {
+const Layout = ({ isSessionActive, onToggleSession, isPaused, onPauseSession }: LayoutProps) => {
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
 
   return (
     <div className="layout-container">
-      <TopBar isSessionActive={isSessionActive} />
+      <TopBar isSessionActive={isSessionActive} isPaused={isPaused} />
       <div className="layout-body">
         <main className="main-content">
           <Outlet />
@@ -22,6 +24,8 @@ const Layout = ({ isSessionActive, onToggleSession }: LayoutProps) => {
         <RightSidebar
           isSessionActive={isSessionActive}
           onToggleSession={onToggleSession}
+          isPaused={isPaused}
+          onPauseSession={onPauseSession}
           isCollapsed={isRightCollapsed}
           onToggleCollapse={() => setIsRightCollapsed(prev => !prev)}
         />

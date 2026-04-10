@@ -27,9 +27,15 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const [isSessionActive, setIsSessionActive] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
 
   const handleToggleSession = () => {
+    if (isSessionActive) setIsPaused(false)
     setIsSessionActive(prev => !prev)
+  }
+
+  const handlePauseSession = () => {
+    setIsPaused(prev => !prev)
   }
 
   return (
@@ -45,6 +51,8 @@ function AppRoutes() {
             <Layout
               isSessionActive={isSessionActive}
               onToggleSession={handleToggleSession}
+              isPaused={isPaused}
+              onPauseSession={handlePauseSession}
             />
           </ProtectedRoute>
         }

@@ -6,25 +6,32 @@ import './Home.css';
 interface Session {
   sessionStart: string;
   sessionEnd: string;
+  activeDuration?: number;
 }
 
 //Calculates total session time from start and end strings
-const calcTotalDuration = (start: string, end: string | null | undefined): string => {
+const calcTotalDuration = (start: string, end: string | null | undefined, activeDuration?: number): string => {
   if (!end) return 'In progress';
-  const toSeconds = (str: string) => {
-    const normalized = str.replace(' ', 'T');
-    const [datePart, timePart] = normalized.split('T');
-    if (!timePart) return 0;
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);
-    return new Date(year, month - 1, day, hours, minutes, seconds).getTime() / 1000;
-  };
 
-  //diff is just total time but in seconds, needed to get hours and minutes
-  const diff = Math.floor(toSeconds(end) - toSeconds(start));
-  const hours = Math.floor(diff / 3600);
-  const minutes = Math.floor((diff % 3600) / 60);
-  const seconds = diff % 60;
+  let totalSecs: number;
+  if ((activeDuration ?? 0) > 0) {
+    totalSecs = activeDuration!;
+  } else {
+    const toSeconds = (str: string) => {
+      const normalized = str.replace(' ', 'T');
+      const [datePart, timePart] = normalized.split('T');
+      if (!timePart) return 0;
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);
+      return new Date(year, month - 1, day, hours, minutes, seconds).getTime() / 1000;
+    };
+    //diff is just total time but in seconds, needed to get hours and minutes
+    totalSecs = Math.floor(toSeconds(end) - toSeconds(start));
+  }
+
+  const hours = Math.floor(totalSecs / 3600);
+  const minutes = Math.floor((totalSecs % 3600) / 60);
+  const seconds = totalSecs % 60;
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
@@ -148,7 +155,7 @@ const Home = () => {
                 {sessions.map((session, animationKey) => {
                   const start = formatDateTime(session.sessionStart);
                   const end = formatDateTime(session.sessionEnd);
-                  const duration = calcTotalDuration(session.sessionStart, session.sessionEnd);
+                  const duration = calcTotalDuration(session.sessionStart, session.sessionEnd, session.activeDuration);
                   return (
                     <div
                       className="snapshot-card"

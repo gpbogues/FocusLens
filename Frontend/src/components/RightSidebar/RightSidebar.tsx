@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import WebcamFeed from '../WebcamFeed/WebcamFeed';
 import { useAuth } from '../../context/AuthContext';
 import './RightSidebar.css';
@@ -6,6 +6,8 @@ import './RightSidebar.css';
 interface RightSidebarProps {
   isSessionActive: boolean;
   onToggleSession: () => void;
+  isPaused: boolean;
+  onPauseSession: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -34,7 +36,7 @@ const toDefaultSessionName = () => {
   );
 };
 
-const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleCollapse }: RightSidebarProps) => {
+const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSession, isCollapsed, onToggleCollapse }: RightSidebarProps) => {
   const { user, notifySessionSaved, highlightSession, clearHighlightSession } = useAuth();
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
@@ -47,21 +49,44 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
   const [isSaving, setIsSaving] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
+  //Date.now() accumulator for active time tracking 
+  const accumulatedMsRef = useRef<number>(0);
+  const lastResumeAtRef = useRef<number>(0);
+  //Ref to capture activeDuration at stop time, used in the save modal
+  const pendingActiveDurationRef = useRef<number>(0);
+
   const handleToggleSession = async () => {
     if (!isSessionActive) {
-      //Starting session: create session in RDS, get sessionId, tell dmb.py
+      //Starting session: reset accumulator, record start time
+      accumulatedMsRef.current = 0;
+      lastResumeAtRef.current = Date.now();
       const startTime = toMySQLDateTime();
       setSessionStart(startTime);
       setSessionEnd('');
       onToggleSession();
     } else {
-      //Stopping session: capture end time, stop session UI, then show save prompt
+      //Stopping session: finalize active duration, capture end time, show save prompt
+      if (!isPaused) {
+        accumulatedMsRef.current += Date.now() - lastResumeAtRef.current;
+      }
+      pendingActiveDurationRef.current = Math.round(accumulatedMsRef.current / 1000);
       const endTime = toMySQLDateTime();
       setSessionEnd(endTime);
       setPendingEndTime(endTime);
       onToggleSession();
       setSaveModal('confirm');
     }
+  };
+
+  const handlePauseResume = () => {
+    if (!isPaused) {
+      //Pausing: accumulate elapsed active time since last resume
+      accumulatedMsRef.current += Date.now() - lastResumeAtRef.current;
+    } else {
+      //Resuming: reset the resume anchor
+      lastResumeAtRef.current = Date.now();
+    }
+    onPauseSession();
   };
 
   //Modal 1: user chose No = discard session
@@ -109,6 +134,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
           sessionEnd: pendingEndTime,
           sessionName: name,
           sessionDescription: description,
+          activeDuration: pendingActiveDurationRef.current,
         }),
       });
       const data = await res.json();
@@ -143,13 +169,27 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isCollapsed, onToggleC
           <div className="webcam-container">
             <WebcamFeed isActive={isSessionActive} />
           </div>
-          <button
-            className={`session-button ${isSessionActive ? 'stop' : 'start'}${highlightSession && !isSessionActive ? ' highlight-pulse' : ''}`}
-            onClick={handleToggleSession}
-            onAnimationEnd={() => { if (highlightSession) clearHighlightSession(); }}
-          >
-            {isSessionActive ? 'Stop Session' : 'Start Session'}
-          </button>
+          {isSessionActive ? (
+            <div className="session-button-row">
+              <button
+                className={`session-button ${isPaused ? 'resume' : 'pause'}`}
+                onClick={handlePauseResume}
+              >
+                {isPaused ? 'Resume' : 'Pause'}
+              </button>
+              <button className="session-button stop" onClick={handleToggleSession}>
+                Stop
+              </button>
+            </div>
+          ) : (
+            <button
+              className={`session-button start${highlightSession ? ' highlight-pulse' : ''}`}
+              onClick={handleToggleSession}
+              onAnimationEnd={() => { if (highlightSession) clearHighlightSession(); }}
+            >
+              Start Session
+            </button>
+          )}
           <div className="session-info-box">
             <span className="session-info-label">Session Start Time</span>
             <span className="session-info-value">{sessionStart || '—'}</span>

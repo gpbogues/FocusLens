@@ -118,3 +118,18 @@
     opacity: 0.8;
   }
 }
+
+.session-indicator.paused {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.session-indicator.paused .session-indicator-dot {
+  background: #f59e0b;
+  animation: none;
+  box-shadow: 0 0 3px 1px rgba(245, 158, 11, 0.5);
+}
+
+.session-indicator.paused .session-indicator-label {
+  color: #fbbf24;
+}

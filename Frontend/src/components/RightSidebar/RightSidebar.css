@@ -114,6 +114,33 @@
   background-color: var(--color-danger-hover);
 }
 
+.session-button-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.session-button-row .session-button {
+  flex: 1;
+  padding: 15px 10px;
+}
+
+.session-button.pause {
+  background-color: #f59e0b;
+}
+
+.session-button.pause:hover {
+  opacity: 0.88;
+}
+
+.session-button.resume {
+  background-color: var(--color-success);
+}
+
+.session-button.resume:hover {
+  opacity: 0.88;
+}
+
 .session-info-box {
   width: 90%;
   background-color: var(--color-bg-surface);
