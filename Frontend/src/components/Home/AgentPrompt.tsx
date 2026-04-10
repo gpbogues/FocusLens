@@ -27,7 +27,7 @@ const AgentPrompt = () => {
       <h1 className="agent-greeting">
         {getGreeting(user?.username)}
       </h1>
-      <p className="agent-subtext">What would you like to do today?</p>
+      <p className="agent-subtext">What would you like to do today? also no function rn, need to set up api</p>
       <div className="agent-input-wrap">
         <input
           className="agent-input"
