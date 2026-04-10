@@ -208,7 +208,7 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
     //full matching row count, eliminating the need for a separate COUNT query
     //tldr, one query instead of two for sesssions page
     const rows = db.prepare(
-      `SELECT sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus,
+      `SELECT SessionID, sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus,
               COUNT(*) OVER() AS total
        FROM UserSession
        WHERE UserID = ? AND LOWER(sessionName) LIKE ?
@@ -220,6 +220,33 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch paginated sessions" });
+  }
+});
+
+//Updates session name and/or description
+app.patch("/sessions/:sessionId", (req, res) => {
+  const { sessionId } = req.params;
+  const { sessionName, sessionDescription } = req.body;
+  try {
+    db.prepare(
+      "UPDATE UserSession SET sessionName = ?, sessionDescription = ? WHERE SessionID = ?"
+    ).run(sessionName, sessionDescription ?? null, sessionId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to update session" });
+  }
+});
+
+//Deletes a session by ID
+app.delete("/sessions/:sessionId", (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    db.prepare("DELETE FROM UserSession WHERE SessionID = ?").run(sessionId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to delete session" });
   }
 });
 
