@@ -644,6 +644,48 @@ app.delete("/user/account", async (req, res) => {
   }
 });
 
+//Agent intent classification via Groq API
+const AGENT_SYSTEM_PROMPT = `You are an intent classifier for FocusLens, a focus-tracking app.
+Classify the user message into exactly one of these actions:
+- navigate_sessions: user wants to view their past sessions or history
+- navigate_metrics: user wants to see focus metrics, analytics, or stats
+- navigate_profile: user wants to edit their profile or settings
+- start_session: user wants to start a new focus/work session
+- unknown: input does not clearly match any action above
+
+Respond with ONLY a valid JSON object, no explanation, no markdown:
+{"action": "<action>"}`;
+
+app.post("/agent", async (req, res) => {
+  const { message } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ success: false });
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: AGENT_SYSTEM_PROMPT },
+          { role: "user", content: message.trim() }
+        ],
+        temperature: 0,
+        max_tokens: 20
+      })
+    });
+    const data = await response.json();
+    const raw = data.choices[0].message.content.trim();
+    const { action } = JSON.parse(raw);
+    res.json({ success: true, action });
+  } catch (err) {
+    console.error("Agent error:", err);
+    res.status(500).json({ success: false, action: "unknown" });
+  }
+});
+
 //Cleanup job, runs every hour
 //Needs more testing to be done, for now keep as is
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
