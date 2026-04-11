@@ -1,4 +1,3 @@
-db.exec(`
   CREATE TABLE IF NOT EXISTS UserData (
     UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
     uEmail        TEXT NOT NULL UNIQUE,
@@ -18,6 +17,7 @@ db.exec(`
     UserID             INTEGER NOT NULL,
     sessionStart       TEXT NOT NULL DEFAULT (datetime('now')),
     sessionEnd         TEXT NOT NULL DEFAULT (datetime('now')),
+    activeDuration     INTEGER NOT NULL DEFAULT 0,
     avgFocus           REAL NOT NULL,
     sessionName        TEXT NOT NULL DEFAULT '',
     sessionDescription TEXT NULL,
