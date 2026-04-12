@@ -9,7 +9,7 @@ interface User {
 }
 
 interface InitialSettings {
-  isDarkMode: boolean;
+  theme: string;
   cameraEnabled: boolean;
   micEnabled: boolean;
   avatarId: string;
