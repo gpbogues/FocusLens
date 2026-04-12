@@ -610,10 +610,48 @@
   font-weight: 600;
 }
 
-/* Folders tab — header row */
+/* Folders tab, header row */
 .folders-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.folders-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 280px;
+}
+
+.folders-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.folders-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 14px 8px 32px;
+  border-radius: 20px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.folders-search:focus {
+  border-color: var(--color-accent);
+}
+
+.folders-search::placeholder {
+  color: var(--color-text-secondary);
 }
 
 .folders-create-btn {
@@ -694,6 +732,12 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
+}
+
+.folder-detail-add-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .folder-back-btn {
