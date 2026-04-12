@@ -77,7 +77,8 @@ db.exec(`
     isDarkMode    INTEGER,
     cameraEnabled INTEGER,
     micEnabled    INTEGER,
-    avatarId      TEXT
+    avatarId      TEXT,
+    theme         TEXT NOT NULL DEFAULT 'dark'
   );
 
   CREATE TABLE IF NOT EXISTS UserSession (
@@ -133,6 +134,18 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid
     ON SessionFolderMap(SessionID);
+`);
+
+//Migrate isDarkMode (boolean) to theme (string) — safe to run on every startup
+try {
+  db.exec("ALTER TABLE UserData ADD COLUMN theme TEXT DEFAULT 'dark'");
+} catch (_) {
+  //Column already exists, ignore
+}
+db.exec(`
+  UPDATE UserData
+  SET theme = CASE WHEN isDarkMode = 0 THEN 'light' ELSE 'dark' END
+  WHERE theme IS NULL OR theme = ''
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
@@ -501,7 +514,7 @@ app.delete("/register-rollback", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const rows = db.prepare("SELECT UserID, uName, uEmail, uPassword, verified, avatarUrl, isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE uEmail=?").all(email);
+    const rows = db.prepare("SELECT UserID, uName, uEmail, uPassword, verified, avatarUrl, theme, cameraEnabled, micEnabled, avatarId FROM UserData WHERE uEmail=?").all(email);
 
     if (rows.length === 0) {
       return res.json({ success: false, message: "server.js: Invalid email or password" });
@@ -529,7 +542,7 @@ app.post("/login", async (req, res) => {
       email: user.uEmail,
       avatarUrl: user.avatarUrl ?? null,
       settings: {
-        isDarkMode: user.isDarkMode,
+        theme: user.theme ?? 'dark',
         cameraEnabled: user.cameraEnabled,
         micEnabled: user.micEnabled,
         avatarId: user.avatarId,
@@ -561,7 +574,7 @@ app.get("/init", async (req, res) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const row = db.prepare(
-      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?"
+      "SELECT theme, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?"
     ).get(decoded.userId);
     if (!row) return res.status(404).json({ success: false });
     res.json({
@@ -570,7 +583,7 @@ app.get("/init", async (req, res) => {
       username: decoded.username,
       email: decoded.email,
       avatarUrl: decoded.avatarUrl ?? null,
-      settings: row,
+      settings: { ...row, theme: row.theme ?? 'dark' },
     });
   } catch {
     res.status(401).json({ success: false });
@@ -594,10 +607,10 @@ app.get("/user/settings", async (req, res) => {
   try {
     const { userId } = jwt.verify(token, process.env.JWT_SECRET);
     const row = db.prepare(
-      "SELECT isDarkMode, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?"
+      "SELECT theme, cameraEnabled, micEnabled, avatarId FROM UserData WHERE UserID=?"
     ).get(userId);
     if (!row) return res.status(404).json({ success: false });
-    res.json({ success: true, ...row });
+    res.json({ success: true, ...row, theme: row.theme ?? 'dark' });
   } catch {
     res.status(401).json({ success: false });
   }
@@ -605,12 +618,12 @@ app.get("/user/settings", async (req, res) => {
 
 //Saves the user's settings to the DB
 app.put("/user/settings", async (req, res) => {
-  const { userId, isDarkMode, cameraEnabled, micEnabled, avatarId } = req.body;
+  const { userId, theme, cameraEnabled, micEnabled, avatarId } = req.body;
   if (!userId) return res.status(400).json({ success: false, message: "userId required" });
   try {
     db.prepare(
-      "UPDATE UserData SET isDarkMode=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?"
-    ).run(isDarkMode ? 1 : 0, cameraEnabled ? 1 : 0, micEnabled ? 1 : 0, avatarId, userId);
+      "UPDATE UserData SET theme=?, cameraEnabled=?, micEnabled=?, avatarId=? WHERE UserID=?"
+    ).run(theme ?? 'dark', cameraEnabled ? 1 : 0, micEnabled ? 1 : 0, avatarId, userId);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
