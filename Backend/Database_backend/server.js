@@ -136,18 +136,6 @@ db.exec(`
     ON SessionFolderMap(SessionID);
 `);
 
-//Migrate isDarkMode (boolean) to theme (string) — safe to run on every startup
-try {
-  db.exec("ALTER TABLE UserData ADD COLUMN theme TEXT DEFAULT 'dark'");
-} catch (_) {
-  //Column already exists, ignore
-}
-db.exec(`
-  UPDATE UserData
-  SET theme = CASE WHEN isDarkMode = 0 THEN 'light' ELSE 'dark' END
-  WHERE theme IS NULL OR theme = ''
-`);
-
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
 
 //Cognito client instance, injects connection info from .env file to connect with AWS Cognito
