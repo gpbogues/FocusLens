@@ -85,7 +85,7 @@ db.exec(`
     UserID             INTEGER NOT NULL,
     sessionStart       TEXT NOT NULL DEFAULT (datetime('now')),
     sessionEnd         TEXT NOT NULL DEFAULT (datetime('now')),
-    activeDuration INTEGER NOT NULL DEFAULT 0,
+    activeDuration     INTEGER NOT NULL DEFAULT 0,
     avgFocus           REAL NOT NULL,
     sessionName        TEXT NOT NULL DEFAULT '',
     sessionDescription TEXT NULL,
@@ -102,6 +102,23 @@ db.exec(`
     FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS SessionFolder (
+    FolderID          INTEGER PRIMARY KEY AUTOINCREMENT,
+    UserID            INTEGER NOT NULL,
+    folderName        TEXT NOT NULL,
+    folderDescription TEXT NULL,
+    createdAt         TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS SessionFolderMap (
+    FolderID  INTEGER NOT NULL,
+    SessionID INTEGER NOT NULL,
+    PRIMARY KEY (FolderID, SessionID),
+    FOREIGN KEY (FolderID)  REFERENCES SessionFolder(FolderID) ON DELETE CASCADE,
+    FOREIGN KEY (SessionID) REFERENCES UserSession(SessionID) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_usersession_userid_start
     ON UserSession(UserID, sessionStart DESC);
 
@@ -113,6 +130,9 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_usersession_userid_lower_name
     ON UserSession(UserID, LOWER(sessionName));
+
+  CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid
+    ON SessionFolderMap(SessionID);
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
@@ -283,6 +303,20 @@ app.delete("/sessions/:sessionId", (req, res) => {
   }
 });
 
+//Returns folder IDs that contain a given session (used by folder picker to pre-check boxes)
+app.get("/sessions/:sessionId/folders", (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const rows = db.prepare(
+      "SELECT FolderID FROM SessionFolderMap WHERE SessionID = ?"
+    ).all(sessionId);
+    res.json({ success: true, folderIds: rows.map(r => r.FolderID) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch session folders" });
+  }
+});
+
 //Fetches 3 most recent sessions for a user (based on userID), used for homepage session snapshots
 app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
@@ -292,6 +326,142 @@ app.get("/sessions/:userId", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch sessions" });
+  }
+});
+
+//Lists all folders for a user with session counts
+app.get("/folders/:userId", (req, res) => {
+  const { userId } = req.params;
+  try {
+    const folders = db.prepare(
+      `SELECT f.FolderID, f.folderName, f.folderDescription,
+              COUNT(m.SessionID) AS sessionCount
+       FROM SessionFolder f
+       LEFT JOIN SessionFolderMap m ON f.FolderID = m.FolderID
+       WHERE f.UserID = ?
+       GROUP BY f.FolderID
+       ORDER BY f.createdAt DESC`
+    ).all(userId);
+    res.json({ success: true, folders });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch folders" });
+  }
+});
+
+//Creates a new folder for a user
+app.post("/folders", (req, res) => {
+  const { userId, folderName, folderDescription } = req.body;
+  if (!userId || !folderName?.trim()) {
+    return res.status(400).json({ success: false, message: "userId and folderName are required" });
+  }
+  try {
+    const result = db.prepare(
+      "INSERT INTO SessionFolder (UserID, folderName, folderDescription) VALUES (?, ?, ?)"
+    ).run(userId, folderName.trim(), folderDescription ?? null);
+    res.json({ success: true, folderId: result.lastInsertRowid });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to create folder" });
+  }
+});
+
+//Updates folder name and/or description; only the provided fields are changed
+app.patch("/folders/:folderId", (req, res) => {
+  const { folderId } = req.params;
+  const { folderName, folderDescription } = req.body;
+  if (folderName === undefined && folderDescription === undefined) {
+    return res.status(400).json({ success: false, message: "Nothing to update" });
+  }
+  try {
+    if (folderName !== undefined && folderDescription !== undefined) {
+      db.prepare("UPDATE SessionFolder SET folderName = ?, folderDescription = ? WHERE FolderID = ?")
+        .run(folderName.trim(), folderDescription, folderId);
+    } else if (folderName !== undefined) {
+      db.prepare("UPDATE SessionFolder SET folderName = ? WHERE FolderID = ?")
+        .run(folderName.trim(), folderId);
+    } else {
+      db.prepare("UPDATE SessionFolder SET folderDescription = ? WHERE FolderID = ?")
+        .run(folderDescription, folderId);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to update folder" });
+  }
+});
+
+//Deletes a folder; cascade on SessionFolderMap removes links, UserSession rows are untouched
+app.delete("/folders/:folderId", (req, res) => {
+  const { folderId } = req.params;
+  try {
+    db.prepare("DELETE FROM SessionFolder WHERE FolderID = ?").run(folderId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to delete folder" });
+  }
+});
+
+//Links a session to a folder; INSERT OR IGNORE is safe for duplicates
+app.post("/folders/:folderId/sessions", (req, res) => {
+  const { folderId } = req.params;
+  const { sessionId } = req.body;
+  try {
+    db.prepare(
+      "INSERT OR IGNORE INTO SessionFolderMap (FolderID, SessionID) VALUES (?, ?)"
+    ).run(folderId, sessionId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to add session to folder" });
+  }
+});
+
+//Unlinks a session from a folder; session itself is preserved
+app.delete("/folders/:folderId/sessions/:sessionId", (req, res) => {
+  const { folderId, sessionId } = req.params;
+  try {
+    db.prepare("DELETE FROM SessionFolderMap WHERE FolderID = ? AND SessionID = ?").run(folderId, sessionId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to remove session from folder" });
+  }
+});
+
+//Fetches paginated sessions within a folder, same query params as /sessions/paginated
+app.get("/folders/:folderId/sessions", (req, res) => {
+  const { folderId } = req.params;
+  const page    = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit   = Math.max(1, parseInt(req.query.limit) || 5);
+  const offset  = (page - 1) * limit;
+  const search  = req.query.search ? String(req.query.search) : '';
+  const sortDir = req.query.sortDir === 'ASC' ? 'ASC' : 'DESC';
+
+  const sortByMap = {
+    date:     'sessionStart',
+    duration: 'activeDuration',
+    avgFocus: 'avgFocus',
+  };
+  const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
+
+  try {
+    const searchParam = `%${search.toLowerCase()}%`;
+    const rows = db.prepare(
+      `SELECT s.SessionID, s.sessionStart, s.sessionEnd, s.sessionName, s.sessionDescription, s.avgFocus, s.activeDuration,
+              COUNT(*) OVER() AS total
+       FROM UserSession s
+       INNER JOIN SessionFolderMap m ON s.SessionID = m.SessionID
+       WHERE m.FolderID = ? AND LOWER(s.sessionName) LIKE ?
+       ORDER BY ${orderExpr} ${sortDir}
+       LIMIT ${limit} OFFSET ${offset}`
+    ).all(folderId, searchParam);
+    const total = rows.length > 0 ? Number(rows[0].total) : 0;
+    res.json({ success: true, sessions: rows, total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch folder sessions" });
   }
 });
 

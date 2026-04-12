@@ -12,10 +12,19 @@ interface Session {
   activeDuration: number;
 }
 
+interface Folder {
+  FolderID: number;
+  folderName: string;
+  folderDescription: string | null;
+  sessionCount: number;
+}
+
 type SortBy = 'date' | 'duration' | 'avgFocus';
 type SortDir = 'ASC' | 'DESC';
 type Layout = 'list' | 'grid';
+type Tab = 'sessions' | 'folders';
 type SessionModalType = 'rename' | 'description' | 'delete';
+type FolderModalType = 'create' | 'rename' | 'description' | 'delete';
 
 const calcTotalDuration = (start: string, end: string | null | undefined, activeDuration?: number): string => {
   if (!end) return 'In progress';
@@ -63,7 +72,7 @@ const formatDateTime = (dateStr: string | null | undefined) => {
   };
 };
 
-//Number of session per page for pagination
+//Number of sessions per page for pagination
 const LIMIT = 6;
 
 const SearchIcon = () => (
@@ -103,24 +112,42 @@ const Sessions = () => {
   const { user, sessionTrigger } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
 
+  // Sessions state
   const [sessions, setSessions] = useState<Session[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [inputValue, setInputValue] = useState('');
   const [search, setSearch] = useState('');
-  //When opening session page, initally sorted by descending date
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortDir, setSortDir] = useState<SortDir>('DESC');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [layout, setLayout] = useState<Layout>('list');
   const [refreshTick, setRefreshTick] = useState(0);
-
-  //3-dot menu and modal state(uses array index as identifier, so only one can be open at a time)
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [sessionModal, setSessionModal] = useState<{ type: SessionModalType; session: Session } | null>(null);
   const [modalInput, setModalInput] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
+
+  //Tab state
+  const [activeTab, setActiveTab] = useState<Tab>('sessions');
+
+  //Folder state
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [activeFolderDetail, setActiveFolderDetail] = useState<Folder | null>(null);
+  const [folderRefreshTick, setFolderRefreshTick] = useState(0);
+  const [folderMenuOpenId, setFolderMenuOpenId] = useState<number | null>(null);
+  const [folderModal, setFolderModal] = useState<{ type: FolderModalType; folder?: Folder } | null>(null);
+  const [folderNameInput, setFolderNameInput] = useState('');
+  const [folderDescInput, setFolderDescInput] = useState('');
+  const [folderModalLoading, setFolderModalLoading] = useState(false);
+
+  //Folder picker state
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [pickerTargetSession, setPickerTargetSession] = useState<Session | null>(null);
+  const [pickerSelectedIds, setPickerSelectedIds] = useState<Set<number>>(new Set());
+  const [pickerOriginalIds, setPickerOriginalIds] = useState<Set<number>>(new Set());
+  const [pickerLoading, setPickerLoading] = useState(false);
 
   //Debounce search input, reduce API calls by only setting search state 350ms after user stops typing
   useEffect(() => {
@@ -131,9 +158,10 @@ const Sessions = () => {
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  //Fetch sessions
+  //Fetch sessions (sessions tab or folder detail view)
   useEffect(() => {
     if (!user) return;
+    if (activeTab === 'folders' && !activeFolderDetail) return;
     setIsLoading(true);
     const params = new URLSearchParams({
       page: String(page),
@@ -142,7 +170,10 @@ const Sessions = () => {
       sortDir,
       search,
     });
-    fetch(`${API_URL}/sessions/paginated/${user.userId}?${params}`, { credentials: 'include' })
+    const url = activeFolderDetail
+      ? `${API_URL}/folders/${activeFolderDetail.FolderID}/sessions?${params}`
+      : `${API_URL}/sessions/paginated/${user.userId}?${params}`;
+    fetch(url, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
@@ -152,9 +183,18 @@ const Sessions = () => {
       })
       .catch(err => console.error('Sessions fetch error:', err))
       .finally(() => setIsLoading(false));
-  }, [user, page, search, sortBy, sortDir, sessionTrigger, refreshTick]);
+  }, [user, page, search, sortBy, sortDir, sessionTrigger, refreshTick, activeFolderDetail, activeTab]);
 
-  // Close dropdown when clicking outside
+  //Fetch folders (always kept fresh for picker and folder tab)
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${API_URL}/folders/${user.userId}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => { if (data.success) setFolders(data.folders); })
+      .catch(err => console.error('Folders fetch error:', err));
+  }, [user, folderRefreshTick, activeTab]);
+
+  //Close session dropdown on outside click
   useEffect(() => {
     if (menuOpenId === null) return;
     const handler = (e: MouseEvent) => {
@@ -165,6 +205,18 @@ const Sessions = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpenId]);
+
+  //Close folder dropdown on outside click
+  useEffect(() => {
+    if (folderMenuOpenId === null) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('.session-menu-wrapper')) {
+        setFolderMenuOpenId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [folderMenuOpenId]);
 
   const handleSort = (field: SortBy) => {
     if (field === sortBy) {
@@ -190,6 +242,7 @@ const Sessions = () => {
       });
       setSessionModal(null);
       setRefreshTick(t => t + 1);
+      setFolderRefreshTick(t => t + 1);
     } catch (err) {
       console.error('Delete session error:', err);
     } finally {
@@ -220,6 +273,190 @@ const Sessions = () => {
     }
   };
 
+  //Folder handlers
+
+  const handleCreateFolder = async () => {
+    if (!user || !folderNameInput.trim()) return;
+    setFolderModalLoading(true);
+    try {
+      await fetch(`${API_URL}/folders`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.userId,
+          folderName: folderNameInput.trim(),
+          folderDescription: folderDescInput.trim() || null,
+        }),
+      });
+      setFolderModal(null);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Create folder error:', err);
+    } finally {
+      setFolderModalLoading(false);
+    }
+  };
+
+  const handleRenameFolder = async () => {
+    if (!folderModal?.folder || !folderNameInput.trim()) return;
+    setFolderModalLoading(true);
+    try {
+      await fetch(`${API_URL}/folders/${folderModal.folder.FolderID}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderName: folderNameInput.trim() }),
+      });
+      if (activeFolderDetail?.FolderID === folderModal.folder.FolderID) {
+        setActiveFolderDetail(f => f ? { ...f, folderName: folderNameInput.trim() } : null);
+      }
+      setFolderModal(null);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Rename folder error:', err);
+    } finally {
+      setFolderModalLoading(false);
+    }
+  };
+
+  const handleUpdateFolderDescription = async () => {
+    if (!folderModal?.folder) return;
+    setFolderModalLoading(true);
+    const newDesc = folderDescInput.trim() || null;
+    try {
+      await fetch(`${API_URL}/folders/${folderModal.folder.FolderID}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderDescription: newDesc }),
+      });
+      if (activeFolderDetail?.FolderID === folderModal.folder.FolderID) {
+        setActiveFolderDetail(f => f ? { ...f, folderDescription: newDesc } : null);
+      }
+      setFolderModal(null);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Update folder description error:', err);
+    } finally {
+      setFolderModalLoading(false);
+    }
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!folderModal?.folder) return;
+    setFolderModalLoading(true);
+    try {
+      await fetch(`${API_URL}/folders/${folderModal.folder.FolderID}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (activeFolderDetail?.FolderID === folderModal.folder.FolderID) {
+        setActiveFolderDetail(null);
+        setPage(1);
+      }
+      setFolderModal(null);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Delete folder error:', err);
+    } finally {
+      setFolderModalLoading(false);
+    }
+  };
+
+  const handleRemoveFromFolder = async (session: Session) => {
+    if (!activeFolderDetail) return;
+    setMenuOpenId(null);
+    try {
+      await fetch(`${API_URL}/folders/${activeFolderDetail.FolderID}/sessions/${session.SessionID}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      setRefreshTick(t => t + 1);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Remove from folder error:', err);
+    }
+  };
+
+  const openFolderPicker = async (session: Session) => {
+    setPickerTargetSession(session);
+    setPickerLoading(true);
+    setShowFolderPicker(true);
+    setMenuOpenId(null);
+    try {
+      const data = await fetch(
+        `${API_URL}/sessions/${session.SessionID}/folders`,
+        { credentials: 'include' }
+      ).then(r => r.json());
+      const ids = new Set<number>((data.folderIds || []) as number[]);
+      setPickerSelectedIds(new Set(ids));
+      setPickerOriginalIds(new Set(ids));
+    } catch (err) {
+      console.error('Folder picker fetch error:', err);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const handleFolderPickerSave = async () => {
+    if (!pickerTargetSession) return;
+    setPickerLoading(true);
+    try {
+      for (const folderId of pickerSelectedIds) {
+        if (!pickerOriginalIds.has(folderId)) {
+          await fetch(`${API_URL}/folders/${folderId}/sessions`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: pickerTargetSession.SessionID }),
+          });
+        }
+      }
+      for (const folderId of pickerOriginalIds) {
+        if (!pickerSelectedIds.has(folderId)) {
+          await fetch(`${API_URL}/folders/${folderId}/sessions/${pickerTargetSession.SessionID}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        }
+      }
+      setShowFolderPicker(false);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Folder picker save error:', err);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const openFolderDetail = (folder: Folder) => {
+    setActiveFolderDetail(folder);
+    setPage(1);
+    setInputValue('');
+    setSearch('');
+    setExpandedIndex(null);
+  };
+
+  const closeFolderDetail = () => {
+    setActiveFolderDetail(null);
+    setPage(1);
+    setInputValue('');
+    setSearch('');
+    setExpandedIndex(null);
+  };
+
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab);
+    setActiveFolderDetail(null);
+    setPage(1);
+    setInputValue('');
+    setSearch('');
+    setMenuOpenId(null);
+    setFolderMenuOpenId(null);
+    setExpandedIndex(null);
+  };
+
   const totalPages = Math.ceil(total / LIMIT);
 
   const sortLabels: Record<SortBy, string> = {
@@ -228,7 +465,7 @@ const Sessions = () => {
     avgFocus: 'Avg Focus',
   };
 
-  const renderDotsMenu = (session: Session, idx: number) => (
+  const renderDotsMenu = (session: Session, idx: number, inFolderView = false) => (
     <div className="session-menu-wrapper">
       <button
         className="session-dots-btn"
@@ -244,6 +481,15 @@ const Sessions = () => {
           <button onClick={() => { setModalInput(session.sessionDescription ?? ''); setSessionModal({ type: 'description', session }); setMenuOpenId(null); }}>
             Edit Description
           </button>
+          {inFolderView ? (
+            <button onClick={() => handleRemoveFromFolder(session)}>
+              Remove from Folder
+            </button>
+          ) : (
+            <button onClick={() => openFolderPicker(session)}>
+              Add to Folder
+            </button>
+          )}
           <button className="session-dropdown-delete" onClick={() => { setSessionModal({ type: 'delete', session }); setMenuOpenId(null); }}>
             Delete
           </button>
@@ -252,7 +498,7 @@ const Sessions = () => {
     </div>
   );
 
-  const renderListCard = (session: Session, i: number) => {
+  const renderListCard = (session: Session, i: number, inFolderView = false) => {
     const start = formatDateTime(session.sessionStart);
     const end = formatDateTime(session.sessionEnd);
     const dur = calcTotalDuration(session.sessionStart, session.sessionEnd, session.activeDuration);
@@ -270,7 +516,7 @@ const Sessions = () => {
           >
             {isOpen ? 'Collapse' : 'Expand'}
           </button>
-          {renderDotsMenu(session, i)}
+          {renderDotsMenu(session, i, inFolderView)}
         </div>
         {isOpen && (
           <div className="session-card-details">
@@ -306,7 +552,7 @@ const Sessions = () => {
     );
   };
 
-  const renderGridCard = (session: Session, i: number) => {
+  const renderGridCard = (session: Session, i: number, inFolderView = false) => {
     const start = formatDateTime(session.sessionStart);
     const dur = calcTotalDuration(session.sessionStart, session.sessionEnd, session.activeDuration);
     const displayName = session.sessionName || start.date;
@@ -316,7 +562,7 @@ const Sessions = () => {
         <div className="session-card-header">
           <span className="session-card-name">{displayName}</span>
           <span className="session-card-date">{start.date}</span>
-          {renderDotsMenu(session, i)}
+          {renderDotsMenu(session, i, inFolderView)}
         </div>
         <div className="session-grid-stats">
           <div className="session-stat-box">
@@ -342,17 +588,15 @@ const Sessions = () => {
     );
   };
 
-  return (
-    <div className="sessions-page">
-      <h2 className="page-heading">Sessions</h2>
-
+  const renderSessionList = (inFolderView = false) => (
+    <>
       <div className="sessions-search-row">
         <div className="sessions-search-wrapper">
           <SearchIcon />
           <input
             className="sessions-search"
             type="text"
-            placeholder="Search in Sessions"
+            placeholder={inFolderView ? 'Search in folder' : 'Search in Sessions'}
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
           />
@@ -401,9 +645,9 @@ const Sessions = () => {
               </div>
             ))
           ) : sessions.length === 0 ? (
-            <p className="no-sessions">No sessions found.</p>
+            <p className="no-sessions">{inFolderView ? 'No sessions in this folder.' : 'No sessions found.'}</p>
           ) : (
-            sessions.map((session, i) => renderListCard(session, i))
+            sessions.map((session, i) => renderListCard(session, i, inFolderView))
           )}
         </div>
       ) : (
@@ -415,9 +659,9 @@ const Sessions = () => {
               </div>
             ))
           ) : sessions.length === 0 ? (
-            <p className="no-sessions">No sessions found.</p>
+            <p className="no-sessions">{inFolderView ? 'No sessions in this folder.' : 'No sessions found.'}</p>
           ) : (
-            sessions.map((session, i) => renderGridCard(session, i))
+            sessions.map((session, i) => renderGridCard(session, i, inFolderView))
           )}
         </div>
       )}
@@ -435,8 +679,111 @@ const Sessions = () => {
           ))}
         </div>
       )}
+    </>
+  );
 
-      {/* Delete confirmation modal */}
+  const renderFolderList = () => (
+    <>
+      <div className="folders-header">
+        <button
+          className="folders-create-btn"
+          onClick={() => { setFolderNameInput(''); setFolderDescInput(''); setFolderModal({ type: 'create' }); }}
+        >
+          + New Folder
+        </button>
+      </div>
+      {folders.length === 0 ? (
+        <p className="no-sessions">No folders yet. Create one to organize your sessions.</p>
+      ) : (
+        <div className="folders-grid">
+          {folders.map(folder => (
+            <div
+              key={folder.FolderID}
+              className="folder-card"
+              onClick={() => openFolderDetail(folder)}
+            >
+              <div className="folder-card-header">
+                <span className="folder-card-name">{folder.folderName}</span>
+                <span className="folder-card-count">
+                  {folder.sessionCount} session{folder.sessionCount !== 1 ? 's' : ''}
+                </span>
+                <div className="session-menu-wrapper" onClick={e => e.stopPropagation()}>
+                  <button
+                    className="session-dots-btn"
+                    onClick={() => setFolderMenuOpenId(folderMenuOpenId === folder.FolderID ? null : folder.FolderID)}
+                  >
+                    <DotsIcon />
+                  </button>
+                  {folderMenuOpenId === folder.FolderID && (
+                    <div className="session-dropdown">
+                      <button onClick={() => { setFolderNameInput(folder.folderName); setFolderModal({ type: 'rename', folder }); setFolderMenuOpenId(null); }}>
+                        Rename
+                      </button>
+                      <button onClick={() => { setFolderDescInput(folder.folderDescription ?? ''); setFolderModal({ type: 'description', folder }); setFolderMenuOpenId(null); }}>
+                        Edit Description
+                      </button>
+                      <button className="session-dropdown-delete" onClick={() => { setFolderModal({ type: 'delete', folder }); setFolderMenuOpenId(null); }}>
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {folder.folderDescription && (
+                <p className="folder-card-description">{folder.folderDescription}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="sessions-page">
+      <h2 className="page-heading">Sessions</h2>
+
+      {/* Tab bar */}
+      <div className="sessions-tab-bar">
+        <button
+          className={`sessions-tab-btn${activeTab === 'sessions' ? ' active' : ''}`}
+          onClick={() => switchTab('sessions')}
+        >
+          Sessions
+        </button>
+        <button
+          className={`sessions-tab-btn${activeTab === 'folders' ? ' active' : ''}`}
+          onClick={() => switchTab('folders')}
+        >
+          Folders
+        </button>
+      </div>
+
+      {/* Sessions tab */}
+      {activeTab === 'sessions' && renderSessionList(false)}
+
+      {/* Folders tab, folder list */}
+      {activeTab === 'folders' && !activeFolderDetail && renderFolderList()}
+
+      {/* Folders tab, folder detail */}
+      {activeTab === 'folders' && activeFolderDetail && (
+        <>
+          <div className="folder-detail-header">
+            <button className="folder-back-btn" onClick={closeFolderDetail}>
+              ← Back
+            </button>
+            <div className="folder-detail-info">
+              <h3 className="folder-detail-name">{activeFolderDetail.folderName}</h3>
+              {activeFolderDetail.folderDescription && (
+                <p className="folder-detail-description">{activeFolderDetail.folderDescription}</p>
+              )}
+            </div>
+          </div>
+          {renderSessionList(true)}
+        </>
+      )}
+
+      {/* Session modals */}
       {sessionModal?.type === 'delete' && (
         <div className="modal-overlay" onClick={() => setSessionModal(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -451,8 +798,6 @@ const Sessions = () => {
           </div>
         </div>
       )}
-
-      {/* Rename modal */}
       {sessionModal?.type === 'rename' && (
         <div className="modal-overlay" onClick={() => setSessionModal(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -474,8 +819,6 @@ const Sessions = () => {
           </div>
         </div>
       )}
-
-      {/* Edit description modal */}
       {sessionModal?.type === 'description' && (
         <div className="modal-overlay" onClick={() => setSessionModal(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -492,6 +835,134 @@ const Sessions = () => {
               <button className="modal-save" onClick={handleUpdateSession} disabled={modalLoading}>
                 {modalLoading ? 'Saving...' : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder modals */}
+      {folderModal?.type === 'create' && (
+        <div className="modal-overlay" onClick={() => setFolderModal(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">New Folder</p>
+            <input
+              className="modal-input"
+              type="text"
+              value={folderNameInput}
+              onChange={e => setFolderNameInput(e.target.value)}
+              placeholder="Folder name"
+              autoFocus
+            />
+            <textarea
+              className="modal-textarea"
+              value={folderDescInput}
+              onChange={e => setFolderDescInput(e.target.value)}
+              placeholder="Description (optional)"
+            />
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setFolderModal(null)} disabled={folderModalLoading}>Cancel</button>
+              <button className="modal-save" onClick={handleCreateFolder} disabled={folderModalLoading || !folderNameInput.trim()}>
+                {folderModalLoading ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {folderModal?.type === 'rename' && (
+        <div className="modal-overlay" onClick={() => setFolderModal(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">Rename Folder</p>
+            <input
+              className="modal-input"
+              type="text"
+              value={folderNameInput}
+              onChange={e => setFolderNameInput(e.target.value)}
+              placeholder="Folder name"
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setFolderModal(null)} disabled={folderModalLoading}>Cancel</button>
+              <button className="modal-save" onClick={handleRenameFolder} disabled={folderModalLoading || !folderNameInput.trim()}>
+                {folderModalLoading ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {folderModal?.type === 'description' && (
+        <div className="modal-overlay" onClick={() => setFolderModal(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">Edit Description</p>
+            <textarea
+              className="modal-textarea"
+              value={folderDescInput}
+              onChange={e => setFolderDescInput(e.target.value)}
+              placeholder="Folder description"
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setFolderModal(null)} disabled={folderModalLoading}>Cancel</button>
+              <button className="modal-save" onClick={handleUpdateFolderDescription} disabled={folderModalLoading}>
+                {folderModalLoading ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {folderModal?.type === 'delete' && (
+        <div className="modal-overlay" onClick={() => setFolderModal(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">Delete Folder</p>
+            <p className="modal-subtitle">
+              This will delete the folder "{folderModal.folder?.folderName}" and unlink all associated sessions.
+              Your sessions will not be deleted.
+            </p>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setFolderModal(null)} disabled={folderModalLoading}>Cancel</button>
+              <button className="modal-save modal-delete-btn" onClick={handleDeleteFolder} disabled={folderModalLoading}>
+                {folderModalLoading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder picker modal */}
+      {showFolderPicker && (
+        <div className="modal-overlay" onClick={() => setShowFolderPicker(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">Add to Folder</p>
+            {pickerLoading ? (
+              <p className="modal-subtitle">Loading...</p>
+            ) : folders.length === 0 ? (
+              <p className="modal-subtitle">No folders yet. Create a folder first from the Folders tab.</p>
+            ) : (
+              <div className="folder-picker-list">
+                {folders.map(folder => (
+                  <label key={folder.FolderID} className="folder-picker-item">
+                    <input
+                      type="checkbox"
+                      checked={pickerSelectedIds.has(folder.FolderID)}
+                      onChange={e => {
+                        const next = new Set(pickerSelectedIds);
+                        if (e.target.checked) next.add(folder.FolderID);
+                        else next.delete(folder.FolderID);
+                        setPickerSelectedIds(next);
+                      }}
+                    />
+                    <span className="folder-picker-name">{folder.folderName}</span>
+                    <span className="folder-picker-count">{folder.sessionCount}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setShowFolderPicker(false)} disabled={pickerLoading}>Cancel</button>
+              {folders.length > 0 && (
+                <button className="modal-save" onClick={handleFolderPickerSave} disabled={pickerLoading}>
+                  {pickerLoading ? 'Saving...' : 'Save'}
+                </button>
+              )}
             </div>
           </div>
         </div>
