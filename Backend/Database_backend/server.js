@@ -121,6 +121,12 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_usersession_userid_start
     ON UserSession(UserID, sessionStart DESC);
+    
+  CREATE INDEX IF NOT EXISTS idx_usersession_userid_duration
+    ON UserSession(UserID, activeDuration DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_usersession_userid_focus
+    ON UserSession(UserID, avgFocus DESC);
 
   CREATE INDEX IF NOT EXISTS idx_sessionchunk_sessionid
     ON SessionChunk(SessionID);

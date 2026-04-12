@@ -149,6 +149,16 @@ const Sessions = () => {
   const [pickerOriginalIds, setPickerOriginalIds] = useState<Set<number>>(new Set());
   const [pickerLoading, setPickerLoading] = useState(false);
 
+  //Folder search state
+  const [folderSearch, setFolderSearch] = useState('');
+
+  //Session picker state (add sessions to folder from folder detail view)
+  const [showSessionPicker, setShowSessionPicker] = useState(false);
+  const [sessionPickerSessions, setSessionPickerSessions] = useState<Session[]>([]);
+  const [sessionPickerSelected, setSessionPickerSelected] = useState<Set<number>>(new Set());
+  const [sessionPickerOriginal, setSessionPickerOriginal] = useState<Set<number>>(new Set());
+  const [sessionPickerLoading, setSessionPickerLoading] = useState(false);
+
   //Debounce search input, reduce API calls by only setting search state 350ms after user stops typing
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -438,12 +448,68 @@ const Sessions = () => {
     setExpandedIndex(null);
   };
 
+  const openSessionPicker = async () => {
+    if (!activeFolderDetail || !user) return;
+    setSessionPickerLoading(true);
+    setShowSessionPicker(true);
+    try {
+      const [allData, folderData] = await Promise.all([
+        fetch(`${API_URL}/sessions/paginated/${user.userId}?page=1&limit=9999&sortBy=date&sortDir=DESC&search=`, { credentials: 'include' }).then(r => r.json()),
+        fetch(`${API_URL}/folders/${activeFolderDetail.FolderID}/sessions?page=1&limit=9999&sortBy=date&sortDir=DESC&search=`, { credentials: 'include' }).then(r => r.json()),
+      ]);
+      const allSessions: Session[] = allData.success ? allData.sessions : [];
+      const existingIds = new Set<number>(
+        (folderData.success ? folderData.sessions : []).map((s: Session) => s.SessionID)
+      );
+      setSessionPickerSessions(allSessions);
+      setSessionPickerSelected(new Set(existingIds));
+      setSessionPickerOriginal(new Set(existingIds));
+    } catch (err) {
+      console.error('Session picker fetch error:', err);
+    } finally {
+      setSessionPickerLoading(false);
+    }
+  };
+
+  const handleSessionPickerSave = async () => {
+    if (!activeFolderDetail) return;
+    setSessionPickerLoading(true);
+    try {
+      for (const sessionId of sessionPickerSelected) {
+        if (!sessionPickerOriginal.has(sessionId)) {
+          await fetch(`${API_URL}/folders/${activeFolderDetail.FolderID}/sessions`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          });
+        }
+      }
+      for (const sessionId of sessionPickerOriginal) {
+        if (!sessionPickerSelected.has(sessionId)) {
+          await fetch(`${API_URL}/folders/${activeFolderDetail.FolderID}/sessions/${sessionId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        }
+      }
+      setShowSessionPicker(false);
+      setRefreshTick(t => t + 1);
+      setFolderRefreshTick(t => t + 1);
+    } catch (err) {
+      console.error('Session picker save error:', err);
+    } finally {
+      setSessionPickerLoading(false);
+    }
+  };
+
   const closeFolderDetail = () => {
     setActiveFolderDetail(null);
     setPage(1);
     setInputValue('');
     setSearch('');
     setExpandedIndex(null);
+    setFolderSearch('');
   };
 
   const switchTab = (tab: Tab) => {
@@ -455,6 +521,7 @@ const Sessions = () => {
     setMenuOpenId(null);
     setFolderMenuOpenId(null);
     setExpandedIndex(null);
+    setFolderSearch('');
   };
 
   const totalPages = Math.ceil(total / LIMIT);
@@ -682,9 +749,26 @@ const Sessions = () => {
     </>
   );
 
-  const renderFolderList = () => (
+  const renderFolderList = () => {
+    const filteredFolders = folders.filter(f =>
+      f.folderName.toLowerCase().includes(folderSearch.toLowerCase())
+    );
+    return (
     <>
       <div className="folders-header">
+        <div className="folders-search-wrapper">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="folders-search-icon">
+            <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.5"/>
+            <line x1="9.5" y1="9.5" x2="13.5" y2="13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input
+            className="folders-search"
+            type="text"
+            placeholder="Search Folders"
+            value={folderSearch}
+            onChange={e => setFolderSearch(e.target.value)}
+          />
+        </div>
         <button
           className="folders-create-btn"
           onClick={() => { setFolderNameInput(''); setFolderDescInput(''); setFolderModal({ type: 'create' }); }}
@@ -694,9 +778,11 @@ const Sessions = () => {
       </div>
       {folders.length === 0 ? (
         <p className="no-sessions">No folders yet. Create one to organize your sessions.</p>
+      ) : filteredFolders.length === 0 ? (
+        <p className="no-sessions">No folders match "{folderSearch}".</p>
       ) : (
         <div className="folders-grid">
-          {folders.map(folder => (
+          {filteredFolders.map(folder => (
             <div
               key={folder.FolderID}
               className="folder-card"
@@ -738,6 +824,7 @@ const Sessions = () => {
       )}
     </>
   );
+  };
 
   return (
     <div className="sessions-page">
@@ -778,6 +865,9 @@ const Sessions = () => {
                 <p className="folder-detail-description">{activeFolderDetail.folderDescription}</p>
               )}
             </div>
+            <button className="folders-create-btn folder-detail-add-btn" onClick={openSessionPicker}>
+              + Add Sessions
+            </button>
           </div>
           {renderSessionList(true)}
         </>
@@ -961,6 +1051,49 @@ const Sessions = () => {
               {folders.length > 0 && (
                 <button className="modal-save" onClick={handleFolderPickerSave} disabled={pickerLoading}>
                   {pickerLoading ? 'Saving...' : 'Save'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session picker modal (add sessions to folder from folder detail view) */}
+      {showSessionPicker && (
+        <div className="modal-overlay" onClick={() => setShowSessionPicker(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">Add Sessions to Folder</p>
+            {sessionPickerLoading ? (
+              <p className="modal-subtitle">Loading...</p>
+            ) : sessionPickerSessions.length === 0 ? (
+              <p className="modal-subtitle">No sessions found.</p>
+            ) : (
+              <div className="folder-picker-list">
+                {sessionPickerSessions.map(session => (
+                  <label key={session.SessionID} className="folder-picker-item">
+                    <input
+                      type="checkbox"
+                      checked={sessionPickerSelected.has(session.SessionID)}
+                      onChange={e => {
+                        const next = new Set(sessionPickerSelected);
+                        if (e.target.checked) next.add(session.SessionID);
+                        else next.delete(session.SessionID);
+                        setSessionPickerSelected(next);
+                      }}
+                    />
+                    <span className="folder-picker-name">{session.sessionName}</span>
+                    <span className="folder-picker-count">
+                      {formatDateTime(session.sessionStart).date}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setShowSessionPicker(false)} disabled={sessionPickerLoading}>Cancel</button>
+              {sessionPickerSessions.length > 0 && (
+                <button className="modal-save" onClick={handleSessionPickerSave} disabled={sessionPickerLoading}>
+                  {sessionPickerLoading ? 'Saving...' : 'Save'}
                 </button>
               )}
             </div>
