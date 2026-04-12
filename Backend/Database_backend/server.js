@@ -186,6 +186,38 @@ app.post("/session", async (req, res) => {
   }
 });
 
+//Fetches daily session aggregates for a given user, year, and month (used for monthly heatmap)
+app.get("/sessions/metrics/monthly/:userId", (req, res) => {
+  const { userId } = req.params;
+  const year  = String(req.query.year  || '');
+  const month = String(req.query.month || '').padStart(2, '0');
+
+  if (!year || !month) {
+    return res.status(400).json({ success: false, message: "year and month query params are required" });
+  }
+
+  try {
+    const rows = db.prepare(
+      `SELECT
+         DATE(sessionStart)  AS day,
+         COUNT(*)            AS sessionCount,
+         SUM(activeDuration) AS totalDuration,
+         AVG(avgFocus)       AS avgFocus
+       FROM UserSession
+       WHERE UserID = ?
+         AND strftime('%Y', sessionStart) = ?
+         AND strftime('%m', sessionStart) = ?
+       GROUP BY DATE(sessionStart)
+       ORDER BY day ASC`
+    ).all(userId, year, month);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("Monthly metrics error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch monthly metrics" });
+  }
+});
+
 //Fetches all sessions for a user with pagination, sorting, and case-insensitive search
 app.get("/sessions/paginated/:userId", async (req, res) => {
   const { userId } = req.params;
