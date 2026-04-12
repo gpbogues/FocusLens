@@ -5,6 +5,36 @@
   gap: 16px;
 }
 
+/* Tab bar */
+.sessions-tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0;
+}
+
+.sessions-tab-btn {
+  padding: 8px 18px;
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  margin-bottom: -1px;
+}
+
+.sessions-tab-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.sessions-tab-btn.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
 /* Search row, full width */
 .sessions-search-row {
   width: 100%;
@@ -578,4 +608,177 @@
   border-color: var(--color-accent);
   color: #fff;
   font-weight: 600;
+}
+
+/* Folders tab — header row */
+.folders-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.folders-create-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--color-accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.folders-create-btn:hover {
+  opacity: 0.85;
+}
+
+/* Folder card grid */
+.folders-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.folder-card {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.folder-card:hover {
+  border-color: var(--color-accent);
+}
+
+.folder-card-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  gap: 8px;
+}
+
+.folder-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.folder-card-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.folder-card-description {
+  margin: 0;
+  padding: 0 18px 14px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+/* Folder detail view */
+.folder-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.folder-back-btn {
+  padding: 7px 14px;
+  font-size: 13px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.folder-back-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.folder-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.folder-detail-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.folder-detail-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Folder picker modal */
+.folder-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.folder-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.folder-picker-item:hover {
+  background-color: var(--color-bg-elevated);
+}
+
+.folder-picker-item input[type="checkbox"] {
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.folder-picker-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-picker-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
 }
