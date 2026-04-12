@@ -77,7 +77,8 @@ db.exec(`
     isDarkMode    INTEGER,
     cameraEnabled INTEGER,
     micEnabled    INTEGER,
-    avatarId      TEXT
+    avatarId      TEXT,
+    theme         TEXT NOT NULL DEFAULT 'dark'
   );
 
   CREATE TABLE IF NOT EXISTS UserSession (
@@ -133,18 +134,6 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid
     ON SessionFolderMap(SessionID);
-`);
-
-//Migrate isDarkMode (boolean) to theme (string) — safe to run on every startup
-try {
-  db.exec("ALTER TABLE UserData ADD COLUMN theme TEXT DEFAULT 'dark'");
-} catch (_) {
-  //Column already exists, ignore
-}
-db.exec(`
-  UPDATE UserData
-  SET theme = CASE WHEN isDarkMode = 0 THEN 'light' ELSE 'dark' END
-  WHERE theme IS NULL OR theme = ''
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
