@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useSettings } from '../../context/SettingsContext';
+import { useSettings, THEMES } from '../../context/SettingsContext';
+import type { Theme } from '../../context/SettingsContext';
 import { cognitoSignUp, cognitoConfirmSignUp, cognitoResendCode } from '../Login/cognitoAuth';
 import AvatarEditor from './AvatarEditor';
 import './Profile.css';
@@ -25,11 +26,21 @@ const Profile = () => {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
   const {
-    isDarkMode, setIsDarkMode,
+    theme, setTheme,
     cameraEnabled, setCameraEnabled,
     micEnabled, setMicEnabled,
     avatarId, setAvatarId,
   } = useSettings();
+
+  const THEME_META: Record<Theme, { label: string; bg: string; accent: string }> = {
+    dark:   { label: 'Dark',   bg: '#1a1a1a', accent: '#646cff' },
+    light:  { label: 'Light',  bg: '#ffffff', accent: '#4f46e5' },
+    ocean:  { label: 'Ocean',  bg: '#0d1b2a', accent: '#0ea5e9' },
+    forest: { label: 'Forest', bg: '#111f11', accent: '#22c55e' },
+    sunset: { label: 'Sunset', bg: '#1f1200', accent: '#f97316' },
+    nord:   { label: 'Nord',   bg: '#2e3440', accent: '#88c0d0' },
+    rose:   { label: 'Rose',   bg: '#fff0f2', accent: '#f43f5e' },
+  };
 
   const selectedAvatar = AVATAR_PRESETS.find(a => a.id === avatarId) ?? AVATAR_PRESETS[0];
   const isCustomSelected = avatarId === CUSTOM_AVATAR_ID;
@@ -405,21 +416,34 @@ const Profile = () => {
 
         <div className="settings-group">
           <p className="settings-group-label">Appearance</p>
-          <div className="settings-row">
-            <div className="settings-row-info">
-              <span className="settings-row-title">{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
-              <span className="settings-row-desc">Toggle between dark and light theme</span>
-            </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={isDarkMode}
-                onChange={e => setIsDarkMode(e.target.checked)}
-              />
-              <span className="toggle-track">
-                <span className="toggle-thumb" />
-              </span>
-            </label>
+          <div className="settings-row-info" style={{ marginBottom: 12 }}>
+            <span className="settings-row-title">Color Theme</span>
+            <span className="settings-row-desc">Choose your preferred color theme</span>
+          </div>
+          <div className="theme-grid">
+            {THEMES.map(t => {
+              const meta = THEME_META[t];
+              return (
+                <button
+                  key={t}
+                  className={`theme-swatch${theme === t ? ' active' : ''}`}
+                  onClick={() => setTheme(t)}
+                  aria-pressed={theme === t}
+                  aria-label={`${meta.label} theme`}
+                >
+                  <span
+                    className="theme-color-preview"
+                    style={{ background: meta.bg }}
+                  >
+                    <span
+                      className="theme-color-accent"
+                      style={{ background: meta.accent }}
+                    />
+                  </span>
+                  <span className="theme-swatch-label">{meta.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
