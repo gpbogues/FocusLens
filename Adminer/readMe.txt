@@ -3,11 +3,16 @@ EC2 SETUP (to view the live database on the server)
 REQUIREMENTS:
     - Docker must be installed on EC2 (not Docker Desktop, just docker.io)
     - Install on EC2 if needed:
-          sudo apt update && sudo apt install -y docker.io docker-compose
+          sudo apt update && sudo apt install -y docker.io docker-compose-plugin
           sudo systemctl start docker
           sudo systemctl enable docker
           sudo usermod -aG docker ubuntu
       Then log out and back in for the group change to take effect.
+
+    IMPORTANT: Use docker-compose-plugin (not the legacy docker-compose package).
+    The legacy docker-compose v1.29.2 crashes with "KeyError: ContainerConfig" on
+    Docker Engine v25+. The plugin ships as `docker compose` (with a space) and
+    does not have this bug.
 
 ONE-TIME SETUP:
 
@@ -20,7 +25,7 @@ ONE-TIME SETUP:
 
     Step 3 — Start Adminer on EC2:
         cd ~/Adminer
-        docker-compose -f docker-compose.ec2.yml up --build -d
+        docker compose -f docker-compose.ec2.yml up --build -d
 
     Verify it's running:
         docker ps
@@ -31,7 +36,7 @@ EVERY TIME YOU WANT TO VIEW THE DB:
     Step 1 — Make sure Adminer is running on EC2 (SSH in and check):
         ssh -i ~/.ssh/LensPair.pem ubuntu@ec2-100-27-212-225.compute-1.amazonaws.com
         cd ~/Adminer
-        docker-compose -f docker-compose.ec2.yml up -d
+        docker compose -f docker-compose.ec2.yml up -d
 
     Step 2 — Open SSH tunnel from a NEW local Git Bash terminal (keep it open, no output is normal):
         ssh -i ~/.ssh/LensPair.pem -L 8080:localhost:8080 ubuntu@ec2-100-27-212-225.compute-1.amazonaws.com -N
@@ -52,8 +57,8 @@ IF YOU UPDATE docker-compose.ec2.yml:
 
     Step 2 — On EC2, restart the container:
         cd ~/Adminer
-        docker-compose down
-        docker-compose -f docker-compose.ec2.yml up --build -d
+        docker compose down
+        docker compose -f docker-compose.ec2.yml up --build -d
 
 NOTE: EC2 public DNS changes if the instance is stopped and restarted.
       Update the hostname in all commands above when that happens.

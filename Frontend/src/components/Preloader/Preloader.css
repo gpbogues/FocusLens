@@ -1,0 +1,26 @@
+.preloader-bg-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--color-bg-surface);
+  z-index: 1000;
+}
+
+.preloader-greeting-wrapper {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  pointer-events: none;
+}
+
+.preloader-greeting {
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--color-text-bright);
+  margin: 0;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}

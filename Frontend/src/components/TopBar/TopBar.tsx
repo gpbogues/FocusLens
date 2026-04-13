@@ -5,9 +5,10 @@ import './TopBar.css';
 
 interface TopBarProps {
   isSessionActive?: boolean;
+  isPaused?: boolean;
 }
 
-const TopBar = ({ isSessionActive }: TopBarProps) => {
+const TopBar = ({ isSessionActive, isPaused }: TopBarProps) => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,9 +52,9 @@ const TopBar = ({ isSessionActive }: TopBarProps) => {
         </h1>
         <div className="top-bar-right">
           {isSessionActive && (
-            <div className="session-indicator">
+            <div className={`session-indicator${isPaused ? ' paused' : ''}`}>
               <span className="session-indicator-dot" />
-              <span className="session-indicator-label">Session Active</span>
+              <span className="session-indicator-label">{isPaused ? 'Session Paused' : 'Session Active'}</span>
             </div>
           )}
         </div>

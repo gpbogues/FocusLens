@@ -1,0 +1,122 @@
+.agent-prompt {
+  padding: 32px 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 860px;
+}
+
+.agent-greeting {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text-bright);
+  margin: 0 0 20px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.agent-input-wrap {
+  width: 100%;
+}
+
+.agent-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  box-sizing: border-box;
+  cursor: text;
+  transition: border-color 0.2s;
+}
+
+/* Response wrapper: grid-row trick avoids max-height layout thrashing */
+.agent-response-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  transition: grid-template-rows 0.7s cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.agent-response-wrap--active {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.65s cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Response text: must have min-height:0 + overflow:hidden for grid collapse */
+.agent-response {
+  min-height: 0;
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--color-accent);
+  margin: 0;
+  padding: 8px 0 2px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.6, 1), transform 0.7s cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.agent-response-wrap--active .agent-response {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.65s ease, transform 0.65s ease;
+}
+
+.agent-response--thinking {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Chips(buttons) */
+.agent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0px;
+  justify-content: center;
+}
+
+.agent-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  /* Staggered entrance on mount */
+  animation: chipFadeIn 0.35s ease both;
+}
+
+.agent-chip:nth-child(1) { animation-delay: 0.05s; }
+.agent-chip:nth-child(2) { animation-delay: 0.12s; }
+.agent-chip:nth-child(3) { animation-delay: 0.19s; }
+.agent-chip:nth-child(4) { animation-delay: 0.26s; }
+
+.agent-chip:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.agent-chip-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+@keyframes chipFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
