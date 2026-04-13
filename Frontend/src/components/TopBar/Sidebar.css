@@ -1,31 +1,35 @@
-.sidebar-backdrop {
+/* Outer wrapper, always in DOM, zero width so it never blocks the page */
+.sidebar-wrapper {
   position: fixed;
   top: 60px;
   left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 998;
-  background: transparent;
+  width: 0;
+  height: calc(100vh - 60px);
+  overflow: visible;
+  z-index: 999;
+  pointer-events: none;
+  filter: drop-shadow(4px 0 16px rgba(0, 0, 0, 0.4));
 }
 
-.sidebar {
-  position: fixed;
-  top: 60px;
+/* Curved SVG background, width/height set inline from motion values */
+.sidebar-bg {
+  position: absolute;
+  top: 0;
   left: 0;
-  width: 220px;
-  height: calc(100vh - 60px);
-  background-color: var(--color-bg-surface);
-  border-right: 1px solid var(--color-border);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.4);
-  transform: translateX(-100%);
-  transition: transform 0.28s ease;
-  z-index: 999;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Content panel, transparent bg; SVG provides the visual surface */
+.sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100%;
+  background-color: transparent;
   display: flex;
   flex-direction: column;
-}
-
-.sidebar-open {
-  transform: translateX(0);
 }
 
 .sidebar-nav {
@@ -37,21 +41,26 @@
 
 .sidebar-top {
   flex: 1;
-  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 28%;
+  gap: 4px;
 }
 
 .sidebar-item {
   display: block;
-  padding: 14px 24px;
+  padding: 10px 28px;
   color: var(--color-text-primary);
   text-decoration: none;
-  font-size: 15px;
-  transition: background-color 0.2s;
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: color 0.2s;
 }
 
 .sidebar-item:hover {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-primary);
+  color: var(--color-accent, #646cff);
 }
 
 .sidebar-bottom {
@@ -64,12 +73,14 @@
 
 .sidebar-btn {
   display: block;
+  width: 100%;
   padding: 10px 16px;
   text-align: center;
   text-decoration: none;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
+  cursor: pointer;
   transition: background-color 0.2s;
 }
 
