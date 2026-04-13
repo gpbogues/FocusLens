@@ -139,6 +139,12 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid
     ON SessionFolderMap(SessionID);
+
+  CREATE INDEX IF NOT EXISTS idx_usersession_metrics_covering
+    ON UserSession(UserID, sessionStart, avgFocus, activeDuration);
+
+  CREATE INDEX IF NOT EXISTS idx_sessionchunk_sessionid_status
+    ON SessionChunk(SessionID, chunkStatus);
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
@@ -160,6 +166,44 @@ const stmtInsertSession = db.prepare(
 );
 const stmtGetRecentSessions = db.prepare(
   "SELECT sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 4"
+);
+
+//Metrics statements (one per range variant, SQL differs so each must be its own statement)
+//also prepare shouldnt be called on every request, only once at start 
+const stmtFocusOverTime7D = db.prepare(
+  `SELECT DATE(sessionStart) AS label, AVG(avgFocus) AS focusScore, COUNT(*) AS sessionCount, SUM(activeDuration) AS totalDuration
+   FROM UserSession
+   WHERE UserID = ? AND sessionStart >= datetime('now', '-7 days')
+   GROUP BY DATE(sessionStart) ORDER BY label ASC`
+);
+const stmtFocusOverTime1M = db.prepare(
+  `SELECT DATE(sessionStart) AS label, AVG(avgFocus) AS focusScore, COUNT(*) AS sessionCount, SUM(activeDuration) AS totalDuration
+   FROM UserSession
+   WHERE UserID = ? AND sessionStart >= datetime('now', '-30 days')
+   GROUP BY DATE(sessionStart) ORDER BY label ASC`
+);
+const stmtFocusOverTime1Y = db.prepare(
+  `SELECT strftime('%Y-%m', sessionStart) AS label, AVG(avgFocus) AS focusScore, COUNT(*) AS sessionCount, SUM(activeDuration) AS totalDuration
+   FROM UserSession
+   WHERE UserID = ? AND sessionStart >= datetime('now', '-12 months')
+   GROUP BY strftime('%Y-%m', sessionStart) ORDER BY label ASC`
+);
+const stmtWeeklySummary = db.prepare(
+  `SELECT
+     DATE(s.sessionStart)                                            AS day,
+     strftime('%w', s.sessionStart)                                  AS dayOfWeek,
+     ROUND(AVG(s.avgFocus), 1)                                       AS focus,
+     COUNT(DISTINCT s.SessionID)                                     AS sessionCount,
+     SUM(s.activeDuration)                                           AS totalDuration,
+     SUM(CASE WHEN c.chunkStatus IN ('VF','SF') THEN 1 ELSE 0 END)   AS focusedChunks,
+     COUNT(c.ChunkId)                                                AS totalChunks
+   FROM UserSession s
+   LEFT JOIN SessionChunk c ON c.SessionID = s.SessionID
+   WHERE s.UserID = ?
+     AND s.sessionStart >= datetime('now', 'weekday 0', '-7 days')
+     AND s.sessionStart <  datetime('now', 'weekday 0')
+   GROUP BY DATE(s.sessionStart)
+   ORDER BY day ASC`
 );
 
 //Looks up real cognito username via email filter before deleting,
@@ -249,33 +293,16 @@ app.get("/metrics/focus-over-time/:userId", (req, res) => {
   const { userId } = req.params;
   const range = req.query.range || "7D";
 
-  let groupBy, whereClause;
-
-  if (range === "7D") {
-    groupBy = "DATE(sessionStart)";
-    whereClause = "sessionStart >= datetime('now', '-7 days')";
-  } else if (range === "1M") {
-    groupBy = "DATE(sessionStart)";
-    whereClause = "sessionStart >= datetime('now', '-30 days')";
-  } else if (range === "1Y") {
-    groupBy = "strftime('%Y-%m', sessionStart)";
-    whereClause = "sessionStart >= datetime('now', '-12 months')";
-  } else {
-    return res.status(400).json({ success: false, message: "Invalid range" });
-  }
+  const stmtMap = {
+    "7D": stmtFocusOverTime7D,
+    "1M": stmtFocusOverTime1M,
+    "1Y": stmtFocusOverTime1Y,
+  };
+  const stmt = stmtMap[range];
+  if (!stmt) return res.status(400).json({ success: false, message: "Invalid range" });
 
   try {
-    const rows = db.prepare(
-      `SELECT
-         ${groupBy}          AS label,
-         AVG(avgFocus)       AS focusScore,
-         COUNT(*)            AS sessionCount,
-         SUM(activeDuration) AS totalDuration
-       FROM UserSession
-       WHERE UserID = ? AND ${whereClause}
-       GROUP BY ${groupBy}
-       ORDER BY label ASC`
-    ).all(userId);
+    const rows = stmt.all(userId);
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error("focus-over-time error:", err);
@@ -287,23 +314,7 @@ app.get("/metrics/focus-over-time/:userId", (req, res) => {
 app.get("/metrics/weekly-summary/:userId", (req, res) => {
   const { userId } = req.params;
   try {
-    const rows = db.prepare(
-      `SELECT
-         DATE(sessionStart)                                              AS day,
-         strftime('%w', sessionStart)                                   AS dayOfWeek,
-         ROUND(AVG(avgFocus), 1)                                        AS focus,
-         COUNT(*)                                                        AS sessionCount,
-         SUM(activeDuration)                                             AS totalDuration,
-         SUM(CASE WHEN c.chunkStatus IN ('VF','SF') THEN 1 ELSE 0 END) AS focusedChunks,
-         COUNT(c.ChunkId)                                                AS totalChunks
-       FROM UserSession s
-       LEFT JOIN SessionChunk c ON c.SessionID = s.SessionID
-       WHERE s.UserID = ?
-         AND s.sessionStart >= datetime('now', 'weekday 0', '-7 days')
-         AND s.sessionStart <  datetime('now', 'weekday 0')
-       GROUP BY DATE(s.sessionStart)
-       ORDER BY day ASC`
-    ).all(userId);
+    const rows = stmtWeeklySummary.all(userId);
 
     const week = Array.from({ length: 7 }, () => ({
       focus: 0, eye: 0, deep: 0, duration: "0m", distractions: 0,
