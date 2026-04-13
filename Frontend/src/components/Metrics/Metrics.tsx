@@ -328,7 +328,7 @@ const Metrics = () => {
             {[
               { label: 'Avg focus',       value: `${avg(focusData)}`, unit: '/100' },
               { label: 'Avg eye contact', value: `${avg(eyeData)}`,   unit: '%'    },
-              { label: 'Sessions',        value: `${range === '7D' ? 12 : range === '1M' ? 48 : 194}`, unit: '' },
+              { label: 'Sessions', value: `${focusData.length}`, unit: '' },
             ].map(({ label, value, unit }) => (
               <div key={label} className="metrics-stat-card">
                 <p className="metrics-stat-label">{label}</p>
