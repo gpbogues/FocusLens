@@ -186,32 +186,28 @@ const Metrics = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
 
-  // ── fetch line graph data ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
-    const fetchLineData = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(
-          `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
-          { credentials: 'include' }
-        );
-        const json = await res.json();
-        if (json.success) {
-          if (json.data.length > 0) {
-            setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
-            setEyeData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
-          } else {
-            setLoading(false);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch focus data:', err);
-        setLoading(false);
+  if (!user) return;
+  const fetchLineData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
+        { credentials: 'include' }
+      );
+      const json = await res.json();
+      if (json.success && json.data.length > 0) {
+        setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
+        setEyeData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
       }
-    };
-    fetchLineData();
-  }, [range, user]);
+    } catch (err) {
+      console.error('Failed to fetch focus data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchLineData();
+}, [range, user]);
 
   // ── fetch weekly diamond data ──────────────────────────────────────────────
   useEffect(() => {
