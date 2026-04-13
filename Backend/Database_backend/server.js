@@ -244,6 +244,91 @@ app.get("/sessions/metrics/monthly/:userId", (req, res) => {
   }
 });
 
+// Returns avgFocus per day/month/year for the line graph
+app.get("/metrics/focus-over-time/:userId", (req, res) => {
+  const { userId } = req.params;
+  const range = req.query.range || "7D";
+
+  let groupBy, whereClause;
+
+  if (range === "7D") {
+    groupBy = "DATE(sessionStart)";
+    whereClause = "sessionStart >= datetime('now', '-7 days')";
+  } else if (range === "1M") {
+    groupBy = "DATE(sessionStart)";
+    whereClause = "sessionStart >= datetime('now', '-30 days')";
+  } else if (range === "1Y") {
+    groupBy = "strftime('%Y-%m', sessionStart)";
+    whereClause = "sessionStart >= datetime('now', '-12 months')";
+  } else {
+    return res.status(400).json({ success: false, message: "Invalid range" });
+  }
+
+  try {
+    const rows = db.prepare(
+      `SELECT
+         ${groupBy}          AS label,
+         AVG(avgFocus)       AS focusScore,
+         COUNT(*)            AS sessionCount,
+         SUM(activeDuration) AS totalDuration
+       FROM UserSession
+       WHERE UserID = ? AND ${whereClause}
+       GROUP BY ${groupBy}
+       ORDER BY label ASC`
+    ).all(userId);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("focus-over-time error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch focus over time" });
+  }
+});
+
+// Returns one row per day-of-week for the current week
+app.get("/metrics/weekly-summary/:userId", (req, res) => {
+  const { userId } = req.params;
+  try {
+    const rows = db.prepare(
+      `SELECT
+         DATE(sessionStart)                                              AS day,
+         strftime('%w', sessionStart)                                   AS dayOfWeek,
+         ROUND(AVG(avgFocus), 1)                                        AS focus,
+         COUNT(*)                                                        AS sessionCount,
+         SUM(activeDuration)                                             AS totalDuration,
+         SUM(CASE WHEN c.chunkStatus IN ('VF','SF') THEN 1 ELSE 0 END) AS focusedChunks,
+         COUNT(c.ChunkId)                                                AS totalChunks
+       FROM UserSession s
+       LEFT JOIN SessionChunk c ON c.SessionID = s.SessionID
+       WHERE s.UserID = ?
+         AND s.sessionStart >= datetime('now', 'weekday 0', '-7 days')
+         AND s.sessionStart <  datetime('now', 'weekday 0')
+       GROUP BY DATE(s.sessionStart)
+       ORDER BY day ASC`
+    ).all(userId);
+
+    const week = Array.from({ length: 7 }, () => ({
+      focus: 0, eye: 0, deep: 0, duration: "0m", distractions: 0,
+    }));
+
+    rows.forEach(row => {
+      const dow = (parseInt(row.dayOfWeek) + 6) % 7;
+      const focusedRatio = row.totalChunks > 0 ? row.focusedChunks / row.totalChunks : 0;
+      const mins = Math.round((row.totalDuration || 0) / 60);
+      week[dow] = {
+        focus:        Math.round(row.focus || 0),
+        eye:          0,
+        deep:         Math.round(focusedRatio * 100),
+        duration:     mins >= 60 ? `${Math.floor(mins/60)}h ${mins % 60}m` : `${mins}m`,
+        distractions: Math.max(0, row.totalChunks - row.focusedChunks),
+      };
+    });
+
+    res.json({ success: true, data: week });
+  } catch (err) {
+    console.error("weekly-summary error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch weekly summary" });
+  }
+});
+
 //Fetches all sessions for a user with pagination, sorting, and case-insensitive search
 app.get("/sessions/paginated/:userId", async (req, res) => {
   const { userId } = req.params;
