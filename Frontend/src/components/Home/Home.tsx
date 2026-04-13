@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { getGreeting } from '../../utils/greeting';
 import AgentPrompt from './AgentPrompt';
+import Preloader from '../Preloader/Preloader';
 import './Home.css';
 
 interface Session {
@@ -73,6 +76,15 @@ const Home = () => {
   const dragState = useRef<{ startY: number; wasOpen: boolean } | null>(null);
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const [fromLogin] = useState(() => {
+    const flag = sessionStorage.getItem('fromLogin') === '1';
+    if (flag) sessionStorage.removeItem('fromLogin');
+    return flag;
+  });
+  const [preloaderActive, setPreloaderActive] = useState(fromLogin);
+  const [bgVisible, setBgVisible] = useState(fromLogin);
+  const [greetingReady, setGreetingReady] = useState(!fromLogin);
+
   //Fetches most recent sessions when user is logged in
   useEffect(() => {
     if (!user) return;
@@ -92,6 +104,21 @@ const Home = () => {
     };
     fetchSessions();
   }, [user, sessionTrigger]);
+
+  useEffect(() => {
+    if (!fromLogin) return;
+    let flipTimer: ReturnType<typeof setTimeout>;
+    const holdTimer = setTimeout(() => {
+      setBgVisible(false);
+      setPreloaderActive(false);
+      flipTimer = setTimeout(() => setGreetingReady(true), 80);
+    }, 1800);
+    return () => {
+      clearTimeout(holdTimer);
+      clearTimeout(flipTimer);
+    };
+  //eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -126,9 +153,10 @@ const Home = () => {
   };
 
   return (
+    <>
     <div className="home-page">
       <div className="home-main-content">
-        <AgentPrompt />
+        <AgentPrompt greetingReady={greetingReady} />
       </div>
 
       {user && (
@@ -188,6 +216,22 @@ const Home = () => {
         </div>
       )}
     </div>
+
+    <AnimatePresence>
+      {bgVisible && (
+        <motion.div
+          className="preloader-bg-overlay"
+          initial={{ y: 0 }}
+          exit={{ y: '-100%' }}
+          transition={{ duration: 0.75, ease: [0.76, 0, 0.24, 1] }}
+        />
+      )}
+    </AnimatePresence>
+
+    {preloaderActive && (
+      <Preloader greetingText={getGreeting(user?.username)} />
+    )}
+    </>
   );
 };
 

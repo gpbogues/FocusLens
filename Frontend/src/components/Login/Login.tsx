@@ -232,6 +232,7 @@ function Login() {
       //This sections works with AuthContext to store user info globally
       if (data.success) {
         //Login response already contains user + settings, set state directly, no extra round-trip
+        sessionStorage.setItem('fromLogin', '1');
         login(data);
 
         //Scale out the login box before navigating to home
