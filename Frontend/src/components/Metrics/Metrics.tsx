@@ -1,5 +1,5 @@
-import { useAuth } from '../../context/AuthContext';
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { Chart, registerables } from 'chart.js';
 import type { ChartConfiguration } from 'chart.js';
 import './Metrics.css';
@@ -7,6 +7,17 @@ import './Metrics.css';
 Chart.register(...registerables);
 
 type Range = '7D' | '1M' | '1Y';
+
+interface DayMetric {
+  focus: number;
+  eye: number;
+  deep: number;
+  duration: string;
+  distractions: number;
+}
+
+const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const DAY_NAMES  = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function getLabels(range: Range): string[] {
   if (range === '7D') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -17,39 +28,31 @@ function getLabels(range: Range): string[] {
 const avg = (arr: number[]) =>
   arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
 
-// Read a CSS variable value at runtime so chart colors match the active theme
+//Read a CSS variable value at runtime so chart colors match the active theme
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const DAY_NAMES  = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-interface DayMetric {
-  focus: number;
-  eye: number;
-  deep: number;
-  duration: string;
-  distractions: number;
-}
-
 function drawDiamond(canvas: HTMLCanvasElement, focus: number, eye: number, deep: number) {
   const ctx = canvas.getContext('2d')!;
-  const W = canvas.width, H = canvas.height;
-  const cx = W / 2, cy = H / 2, R = 88;
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 88;
   ctx.clearRect(0, 0, W, H);
 
-  const accent  = cssVar('--color-accent')  || '#646cff';
-  const success = cssVar('--color-success') || '#22c55e';
-  const danger  = cssVar('--color-danger')  || '#ef4444';
-  const border  = cssVar('--color-border')  || '#404040';
+  const accent  = cssVar('--color-accent')     || '#646cff';
+  const success = cssVar('--color-success')    || '#22c55e';
+  const danger  = cssVar('--color-danger')     || '#ef4444';
+  const border  = cssVar('--color-border')     || '#404040';
   const muted   = cssVar('--color-text-muted') || '#6b7280';
-  const bg      = cssVar('--color-bg-elevated') || '#242424';
+  const bg      = cssVar('--color-bg-elevated')|| '#242424';
 
   const pts4 = (r: number): [number, number][] => [
-    [cx,       cy - R * r],
+    [cx      , cy - R * r],
     [cx + R*r, cy        ],
-    [cx,       cy + R * r],
+    [cx      , cy + R * r],
     [cx - R*r, cy        ],
   ];
 
@@ -59,19 +62,27 @@ function drawDiamond(canvas: HTMLCanvasElement, focus: number, eye: number, deep
     ctx.moveTo(p[0][0], p[0][1]);
     p.forEach(pt => ctx.lineTo(pt[0], pt[1]));
     ctx.closePath();
-    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
   });
 
   pts4(1).forEach(pt => {
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(pt[0], pt[1]);
-    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(pt[0], pt[1]);
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
   });
 
-  const f = focus / 100, e = eye / 100, d = deep / 100;
+  const f = focus / 100;
+  const e = eye / 100;
+  const d = deep / 100;
   const poly: [number, number][] = [
-    [cx,                     cy - R * f],
-    [cx + R * e,             cy        ],
-    [cx,                     cy + R * d],
+    [cx                    , cy - R * f],
+    [cx + R * e            , cy        ],
+    [cx                    , cy + R * d],
     [cx - R * ((f+e+d) / 3), cy        ],
   ];
 
@@ -79,17 +90,25 @@ function drawDiamond(canvas: HTMLCanvasElement, focus: number, eye: number, deep
   ctx.moveTo(poly[0][0], poly[0][1]);
   poly.forEach(pt => ctx.lineTo(pt[0], pt[1]));
   ctx.closePath();
-  ctx.fillStyle = accent + '30'; ctx.fill();
-  ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = accent + '30';
+  ctx.fill();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
   [accent, success, danger, accent].forEach((col, i) => {
-    ctx.beginPath(); ctx.arc(poly[i][0], poly[i][1], 5, 0, Math.PI * 2);
-    ctx.fillStyle = col; ctx.fill();
-    ctx.strokeStyle = bg; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(poly[i][0], poly[i][1], 5, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = 2;
+    ctx.stroke();
   });
 
   ctx.font = '11px system-ui, sans-serif';
-  ctx.fillStyle = muted; ctx.textAlign = 'center';
+  ctx.fillStyle = muted;
+  ctx.textAlign = 'center';
   ctx.fillText('Focus', cx,          cy - R - 10);
   ctx.fillText('Eye',   cx + R + 14, cy + 4);
   ctx.fillText('Deep',  cx,          cy + R + 16);
@@ -177,39 +196,47 @@ const Metrics = () => {
   const { user } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
 
-  const [range, setRange]         = useState<Range>('7D');
+  //Chart data state
+  const [range, setRange] = useState<Range>('7D');
   const [focusData, setFocusData] = useState<number[]>([]);
-  const [eyeData,   setEyeData]   = useState<number[]>([]);
-  const [weekData,  setWeekData]  = useState<DayMetric[]>([]);
-  const [loading,   setLoading]   = useState(true);
+  const [eyeData, setEyeData] = useState<number[]>([]);
+  const [sessionCount, setSessionCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  //Diamond wheel state
+  const [weekData, setWeekData] = useState<DayMetric[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<Chart | null>(null);
+  const chartRef = useRef<Chart | null>(null);
 
+  //Fetch line chart data when range or user changes
   useEffect(() => {
-  if (!user) return;
-  const fetchLineData = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
-        { credentials: 'include' }
-      );
-      const json = await res.json();
-      if (json.success && json.data.length > 0) {
-        setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
-        setEyeData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
+    if (!user) return;
+    const fetchLineData = async () => {
+      setLoading(true);
+      setSessionCount(null);
+      setFocusData([]);
+      setEyeData([]);
+      try {
+        const res = await fetch(
+          `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
+          { credentials: 'include' }
+        );
+        const json = await res.json();
+        if (json.success && json.data.length > 0) {
+          setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
+          setSessionCount(json.data.reduce((sum: number, d: any) => sum + (d.sessionCount || 0), 0));
+        }
+      } catch (err) {
+        console.error('Failed to fetch focus data:', err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch focus data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchLineData();
-}, [range, user]);
+    };
+    fetchLineData();
+  }, [range, user]);
 
-  // ── fetch weekly diamond data ──────────────────────────────────────────────
+  //Fetch weekly diamond data
   useEffect(() => {
     if (!user) return;
     const fetchWeekData = async () => {
@@ -227,16 +254,16 @@ const Metrics = () => {
     fetchWeekData();
   }, [user]);
 
-  // ── build chart using theme-aware colors ───────────────────────────────────
+  //Build chart using theme-aware colors
   useEffect(() => {
     if (!canvasRef.current || focusData.length === 0) return;
     chartRef.current?.destroy();
 
-    const accent  = cssVar('--color-accent')       || '#646cff';
-    const success = cssVar('--color-success')      || '#22c55e';
-    const muted   = cssVar('--color-text-muted')   || '#6b7280';
-    const border  = cssVar('--color-border')       || '#404040';
-    const bright  = cssVar('--color-text-bright')  || '#e5e7eb';
+    const accent  = cssVar('--color-accent')      || '#646cff';
+    const success = cssVar('--color-success')     || '#22c55e';
+    const muted   = cssVar('--color-text-muted')  || '#6b7280';
+    const border  = cssVar('--color-border')      || '#404040';
+    const bright  = cssVar('--color-text-bright') || '#e5e7eb';
 
     const config: ChartConfiguration = {
       type: 'line',
@@ -248,33 +275,43 @@ const Metrics = () => {
             data: focusData,
             borderColor: accent,
             backgroundColor: accent + '26',
-            fill: true, tension: 0.45, pointRadius: 3,
+            fill: true,
+            tension: 0.45,
+            pointRadius: 3,
             pointBackgroundColor: accent,
             pointBorderColor: cssVar('--color-bg-elevated') || '#242424',
-            pointBorderWidth: 2, borderWidth: 2,
+            pointBorderWidth: 2,
+            borderWidth: 2,
           },
           {
             label: 'Eye Contact %',
             data: eyeData,
             borderColor: success,
             backgroundColor: success + '1e',
-            fill: true, tension: 0.45, pointRadius: 3,
+            fill: true,
+            tension: 0.45,
+            pointRadius: 3,
             pointBackgroundColor: success,
             pointBorderColor: cssVar('--color-bg-elevated') || '#242424',
-            pointBorderWidth: 2, borderWidth: 2,
+            pointBorderWidth: 2,
+            borderWidth: 2,
             borderDash: [5, 3],
           },
         ],
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true,
+        maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: cssVar('--color-bg-surface') || '#1a1a1a',
-            borderColor: border, borderWidth: 1,
-            titleColor: bright, bodyColor: muted, padding: 12,
+            borderColor: border,
+            borderWidth: 1,
+            titleColor: bright,
+            bodyColor: muted,
+            padding: 12,
             callbacks: { label: (ctx: any) => ` ${ctx.dataset.label}: ${Math.round(ctx.raw as number)}` },
           },
         },
@@ -285,7 +322,8 @@ const Metrics = () => {
             border: { color: border },
           },
           y: {
-            min: 0, max: 100,
+            min: 0,
+            max: 100,
             grid: { color: border + '44' },
             ticks: { color: muted, font: { size: 11 }, stepSize: 20 },
             border: { color: border },
@@ -326,9 +364,21 @@ const Metrics = () => {
 
           <div className="metrics-stat-cards">
             {[
-              { label: 'Avg focus',       value: `${avg(focusData)}`, unit: '/100' },
-              { label: 'Avg eye contact', value: `${avg(eyeData)}`,   unit: '%'    },
-              { label: 'Sessions', value: `${focusData.length}`, unit: '' },
+              {
+                label: 'Avg focus',
+                value: focusData.length ? `${avg(focusData)}` : '-',
+                unit:  focusData.length ? '/100' : '',
+              },
+              {
+                label: 'Avg eye contact',
+                value: '-',
+                unit:  '',
+              },
+              {
+                label: 'Sessions',
+                value: sessionCount !== null ? `${sessionCount}` : '-',
+                unit:  '',
+              },
             ].map(({ label, value, unit }) => (
               <div key={label} className="metrics-stat-card">
                 <p className="metrics-stat-label">{label}</p>
