@@ -1,15 +1,14 @@
-Overview of what the database is currently looking like,
-running the entire script will reset all tables and data.
+Database currently hosted on ec2,
+without adminer access, you can view within bash by ssh into ec2,
+there, you cd to Database_backend and use 'sqlite3 focuslens.db'
 
-Note that when inserting values, order of variables matter.
+Basic Commands:
 
-SessionGraphics table acts as third table placeholder, feel free to alter as needed
+.tables (view tales)
+.schema (view schema)
+select * from TableName (view table data)
 
-Basic Formatting:
-
-INSERT INTO (tableName) VALUES (variables);
-    Note, backend formatting might differ, please reference Register and Login APIs of 'server.js' file 
-    of Backend Database folder as needed
-
-SELECT (variables) FROM (tableName); 
-    can replace ('variables' with '*' to select ALL variables from given table)
+for table data viewing, you can do,
+.headers on
+.mode column
+to enchace clarity (kinda) 

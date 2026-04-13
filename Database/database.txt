@@ -1,5 +1,4 @@
-db.exec(`
-  CREATE TABLE IF NOT EXISTS UserData (
+CREATE TABLE IF NOT EXISTS UserData (
     UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
     uEmail        TEXT NOT NULL UNIQUE,
     uName         TEXT NOT NULL,
@@ -7,10 +6,10 @@ db.exec(`
     verified      INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     avatarUrl     TEXT NULL DEFAULT NULL,
-    isDarkMode    INTEGER,
     cameraEnabled INTEGER,
     micEnabled    INTEGER,
-    avatarId      TEXT
+    avatarId      TEXT,
+    theme         TEXT NOT NULL DEFAULT 'dark'
   );
 
   CREATE TABLE IF NOT EXISTS UserSession (
@@ -18,6 +17,7 @@ db.exec(`
     UserID             INTEGER NOT NULL,
     sessionStart       TEXT NOT NULL DEFAULT (datetime('now')),
     sessionEnd         TEXT NOT NULL DEFAULT (datetime('now')),
+    activeDuration     INTEGER NOT NULL DEFAULT 0,
     avgFocus           REAL NOT NULL,
     sessionName        TEXT NOT NULL DEFAULT '',
     sessionDescription TEXT NULL,
@@ -34,6 +34,23 @@ db.exec(`
     FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS SessionFolder (
+    FolderID          INTEGER PRIMARY KEY AUTOINCREMENT,
+    UserID            INTEGER NOT NULL,
+    folderName        TEXT NOT NULL,
+    folderDescription TEXT NULL,
+    createdAt         TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS SessionFolderMap (
+    FolderID  INTEGER NOT NULL,
+    SessionID INTEGER NOT NULL,
+    PRIMARY KEY (FolderID, SessionID),
+    FOREIGN KEY (FolderID)  REFERENCES SessionFolder(FolderID) ON DELETE CASCADE,
+    FOREIGN KEY (SessionID) REFERENCES UserSession(SessionID) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_usersession_userid_start
     ON UserSession(UserID, sessionStart DESC);
 
@@ -45,3 +62,6 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_usersession_userid_lower_name
     ON UserSession(UserID, LOWER(sessionName));
+
+  CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid
+    ON SessionFolderMap(SessionID);

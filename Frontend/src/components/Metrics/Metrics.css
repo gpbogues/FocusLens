@@ -10,32 +10,14 @@
   margin-bottom: 24px;
 }
 
-.metrics-placeholder {
+.metrics-section {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 300px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.placeholder-card {
-  background-color: var(--color-bg-deep);
-  border: 2px dashed var(--color-border);
-  border-radius: 12px;
-  padding: 40px;
-  max-width: 600px;
-  text-align: center;
-}
-
-.placeholder-text {
-  color: var(--color-text-primary);
-  font-size: 16px;
-  margin: 0 0 12px 0;
-  line-height: 1.5;
-}
-
-.placeholder-subtext {
-  color: var(--color-text-muted);
-  font-size: 14px;
+.metrics-section-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
   margin: 0;
-  line-height: 1.5;
 }

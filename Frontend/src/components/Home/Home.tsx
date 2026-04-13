@@ -1,29 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { getGreeting } from '../../utils/greeting';
+import AgentPrompt from './AgentPrompt';
+import Preloader from '../Preloader/Preloader';
 import './Home.css';
 
 interface Session {
   sessionStart: string;
   sessionEnd: string;
+  activeDuration?: number;
 }
 
 //Calculates total session time from start and end strings
-const calcTotalDuration = (start: string, end: string | null | undefined): string => {
+const calcTotalDuration = (start: string, end: string | null | undefined, activeDuration?: number): string => {
   if (!end) return 'In progress';
-  const toSeconds = (str: string) => {
-    const normalized = str.replace(' ', 'T');
-    const [datePart, timePart] = normalized.split('T');
-    if (!timePart) return 0;
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);
-    return new Date(year, month - 1, day, hours, minutes, seconds).getTime() / 1000;
-  };
 
-  //diff is just total time but in seconds, needed to get hours and minutes
-  const diff = Math.floor(toSeconds(end) - toSeconds(start));
-  const hours = Math.floor(diff / 3600);
-  const minutes = Math.floor((diff % 3600) / 60);
-  const seconds = diff % 60;
+  let totalSecs: number;
+  if ((activeDuration ?? 0) > 0) {
+    totalSecs = activeDuration!;
+  } else {
+    const toSeconds = (str: string) => {
+      const normalized = str.replace(' ', 'T');
+      const [datePart, timePart] = normalized.split('T');
+      if (!timePart) return 0;
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);
+      return new Date(year, month - 1, day, hours, minutes, seconds).getTime() / 1000;
+    };
+    //diff is just total time but in seconds, needed to get hours and minutes
+    totalSecs = Math.floor(toSeconds(end) - toSeconds(start));
+  }
+
+  const hours = Math.floor(totalSecs / 3600);
+  const minutes = Math.floor((totalSecs % 3600) / 60);
+  const seconds = totalSecs % 60;
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
@@ -52,12 +63,29 @@ const formatDateTime = (dateStr: string | null | undefined) => {
   };
 };
 
+const DRAWER_HEIGHT = 380;
+const HANDLE_HEIGHT = 48;
+
 const Home = () => {
   const { user, sessionTrigger } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [animKey, setAnimKey] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ startY: number; wasOpen: boolean } | null>(null);
   const API_URL = import.meta.env.VITE_API_URL;
 
-  //Fetches 3 most recent sessions when user is logged in
+  const [fromLogin] = useState(() => {
+    const flag = sessionStorage.getItem('fromLogin') === '1';
+    if (flag) sessionStorage.removeItem('fromLogin');
+    return flag;
+  });
+  const [preloaderActive, setPreloaderActive] = useState(fromLogin);
+  const [bgVisible, setBgVisible] = useState(fromLogin);
+  const [greetingReady, setGreetingReady] = useState(!fromLogin);
+
+  //Fetches most recent sessions when user is logged in
   useEffect(() => {
     if (!user) return;
     console.log('Home: fetching sessions, sessionTrigger:', sessionTrigger);
@@ -68,6 +96,7 @@ const Home = () => {
         console.log('Home: sessions fetched:', data);
         if (data.success) {
           setSessions(data.sessions);
+          setAnimKey(k => k + 1);
         }
       } catch (err) {
         console.error('Failed to fetch sessions:', err);
@@ -76,46 +105,133 @@ const Home = () => {
     fetchSessions();
   }, [user, sessionTrigger]);
 
+  useEffect(() => {
+    if (!fromLogin) return;
+    let flipTimer: ReturnType<typeof setTimeout>;
+    const holdTimer = setTimeout(() => {
+      setBgVisible(false);
+      setPreloaderActive(false);
+      flipTimer = setTimeout(() => setGreetingReady(true), 80);
+    }, 1800);
+    return () => {
+      clearTimeout(holdTimer);
+      clearTimeout(flipTimer);
+    };
+  //eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragState.current = { startY: e.clientY, wasOpen: drawerOpen };
+    drawerRef.current?.classList.add('dragging');
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragState.current) return;
+    const delta = e.clientY - dragState.current.startY;
+    const maxDown = dragState.current.wasOpen ? DRAWER_HEIGHT - HANDLE_HEIGHT : 0;
+    const maxUp = dragState.current.wasOpen ? 0 : -(DRAWER_HEIGHT - HANDLE_HEIGHT);
+    setDragOffset(Math.max(maxUp, Math.min(maxDown, delta)));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragState.current) return;
+    const delta = e.clientY - dragState.current.startY;
+    drawerRef.current?.classList.remove('dragging');
+    if (Math.abs(delta) < 8) {
+      setDrawerOpen(o => {
+        if (!o) setAnimKey(k => k + 1);
+        return !o;
+      });
+    } else {
+      const next = delta < -40 ? true : delta > 40 ? false : dragState.current.wasOpen;
+      if (next && !dragState.current.wasOpen) setAnimKey(k => k + 1);
+      setDrawerOpen(next);
+    }
+    setDragOffset(0);
+    dragState.current = null;
+  };
+
   return (
+    <>
     <div className="home-page">
-      <h2 className="page-heading">Session Snapshots</h2>
-      {/* Only render snapshots if user is logged in */}
+      <div className="home-main-content">
+        <AgentPrompt greetingReady={greetingReady} />
+      </div>
+
       {user && (
-        <div className="snapshots-container">
-          {/* Ternary operation where available sessions are checked to see if any exist */}
-          {sessions.length === 0 ? (
-            <p className="no-sessions">No sessions recorded yet.</p>
-          ) : (
-            sessions.map((session, animationKey) => {
-            const start = formatDateTime(session.sessionStart);
-            const end = formatDateTime(session.sessionEnd);
-            const duration = calcTotalDuration(session.sessionStart, session.sessionEnd);
-            return (
-              <div className="snapshot-card" key={`${animationKey}-${session.sessionStart}`}>
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">Date</span>
-                    <span className="snapshot-value">{start.date}</span>
-                  </div>
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">Start Time</span>
-                    <span className="snapshot-value">{start.time}</span>
-                  </div>
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">End Time</span>
-                    <span className="snapshot-value">{end.time}</span>
-                  </div>
-                  <div className="snapshot-divider" />
-                  <div className="snapshot-row">
-                    <span className="snapshot-label">Duration</span>
-                    <span className="snapshot-value snapshot-duration">{duration}</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
+        <div
+          className={`session-drawer${drawerOpen ? ' open' : ''}`}
+          ref={drawerRef}
+          style={{ '--drag-offset': `${dragOffset}px` } as React.CSSProperties}
+        >
+          <div
+            className="drawer-handle-bar"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            <div className="drawer-pill" />
+            <span className="drawer-tab-label">Session Snapshots</span>
+          </div>
+
+          <div className="drawer-content">
+            {sessions.length === 0 ? (
+              <p className="no-sessions">No sessions recorded yet.</p>
+            ) : (
+              <div className="sessions-grid" key={animKey}>
+                {sessions.map((session, animationKey) => {
+                  const start = formatDateTime(session.sessionStart);
+                  const end = formatDateTime(session.sessionEnd);
+                  const duration = calcTotalDuration(session.sessionStart, session.sessionEnd, session.activeDuration);
+                  return (
+                    <div
+                      className="snapshot-card"
+                      key={`${animationKey}-${session.sessionStart}`}
+                      style={{ animationDelay: `${animationKey * 60}ms` }}
+                    >
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">Date</span>
+                        <span className="snapshot-value">{start.date}</span>
+                      </div>
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">Start Time</span>
+                        <span className="snapshot-value">{start.time}</span>
+                      </div>
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">End Time</span>
+                        <span className="snapshot-value">{end.time}</span>
+                      </div>
+                      <div className="snapshot-divider" />
+                      <div className="snapshot-row">
+                        <span className="snapshot-label">Duration</span>
+                        <span className="snapshot-value snapshot-duration">{duration}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
+
+    <AnimatePresence>
+      {bgVisible && (
+        <motion.div
+          className="preloader-bg-overlay"
+          initial={{ y: 0 }}
+          exit={{ y: '-100%' }}
+          transition={{ duration: 0.75, ease: [0.76, 0, 0.24, 1] }}
+        />
+      )}
+    </AnimatePresence>
+
+    {preloaderActive && (
+      <Preloader greetingText={getGreeting(user?.username)} />
+    )}
+    </>
   );
 };
 

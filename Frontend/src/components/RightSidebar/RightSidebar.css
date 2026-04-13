@@ -96,12 +96,49 @@
   opacity: 0.88;
 }
 
+.session-button.highlight-pulse {
+  animation: sessionPulse 1s ease-out forwards;
+}
+
+@keyframes sessionPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  50%  { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
 .session-button.stop {
   background-color: var(--color-danger);
 }
 
 .session-button.stop:hover {
   background-color: var(--color-danger-hover);
+}
+
+.session-button-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.session-button-row .session-button {
+  flex: 1;
+  padding: 15px 10px;
+}
+
+.session-button.pause {
+  background-color: #f59e0b;
+}
+
+.session-button.pause:hover {
+  opacity: 0.88;
+}
+
+.session-button.resume {
+  background-color: var(--color-success);
+}
+
+.session-button.resume:hover {
+  opacity: 0.88;
 }
 
 .session-info-box {
@@ -221,4 +258,9 @@
 
 .modal-save:hover {
   background: var(--color-accent-hover);
+}
+
+.modal-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

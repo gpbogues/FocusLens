@@ -2,9 +2,12 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
+export const THEMES = ['dark', 'light', 'ocean', 'forest', 'sunset', 'nord', 'rose'] as const;
+export type Theme = typeof THEMES[number];
+
 interface SettingsContextType {
-  isDarkMode: boolean;
-  setIsDarkMode: (v: boolean) => void;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
   cameraEnabled: boolean;
   setCameraEnabled: (v: boolean) => void;
   micEnabled: boolean;
@@ -20,7 +23,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { user, initialSettings } = useAuth();
   const userId = user?.userId;
 
-  const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
+  const [theme, setThemeState] = useState<Theme>('dark');
   const [cameraEnabled, setCameraEnabledState] = useState<boolean>(true);
   const [micEnabled, setMicEnabledState] = useState<boolean>(false);
   const [avatarId, setAvatarIdState] = useState<string>('fox');
@@ -36,7 +39,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
     if (initialSettings) {
       //Settings arrived with /init, no extra round-trip needed
-      setIsDarkModeState(Boolean(initialSettings.isDarkMode));
+      setThemeState((initialSettings.theme as Theme) ?? 'dark');
       setCameraEnabledState(Boolean(initialSettings.cameraEnabled));
       setMicEnabledState(Boolean(initialSettings.micEnabled));
       setAvatarIdState(initialSettings.avatarId ?? 'fox');
@@ -46,7 +49,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
-            setIsDarkModeState(Boolean(data.isDarkMode));
+            setThemeState((data.theme as Theme) ?? 'dark');
             setCameraEnabledState(Boolean(data.cameraEnabled));
             setMicEnabledState(Boolean(data.micEnabled));
             setAvatarIdState(data.avatarId ?? 'fox');
@@ -60,31 +63,32 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!userId) {
       loadedForUser.current = undefined;
-      setIsDarkModeState(true);
+      setThemeState('dark');
       setCameraEnabledState(true);
       setMicEnabledState(false);
       setAvatarIdState('fox');
     }
   }, [userId]);
 
-  //Apply dark/light theme to DOM whenever isDarkMode changes
+  //Apply theme to DOM whenever it changes
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
-  const saveSettings = (patch: Partial<{ isDarkMode: boolean; cameraEnabled: boolean; micEnabled: boolean; avatarId: string }>) => {
+  const saveSettings = (patch: Partial<{ theme: Theme; cameraEnabled: boolean; micEnabled: boolean; avatarId: string }>) => {
     if (!userId) return;
     fetch(`${API_URL}/user/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ userId, isDarkMode, cameraEnabled, micEnabled, avatarId, ...patch }),
+      body: JSON.stringify({ userId, theme, cameraEnabled, micEnabled, avatarId, ...patch }),
     }).catch(() => {});
   };
 
-  const setIsDarkMode = (v: boolean) => {
-    setIsDarkModeState(v);
-    saveSettings({ isDarkMode: v });
+  const setTheme = (t: Theme) => {
+    setThemeState(t);
+    saveSettings({ theme: t });
   };
 
   const setCameraEnabled = (v: boolean) => {
@@ -104,7 +108,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <SettingsContext.Provider value={{
-      isDarkMode, setIsDarkMode,
+      theme, setTheme,
       cameraEnabled, setCameraEnabled,
       micEnabled, setMicEnabled,
       avatarId, setAvatarId,
