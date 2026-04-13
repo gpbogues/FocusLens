@@ -1,18 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { getGreeting } from '../../utils/greeting';
 import './AgentPrompt.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
-
-const getGreeting = (username?: string) => {
-  const h = new Date().getHours();
-  const name = username ? `, ${username}` : '';
-  if (h >= 1 && h < 4) return 'Still at it this late?';
-  if (h >= 4 && h < 12) return `Good morning${name}.`;
-  if (h >= 12 && h < 18) return `Good afternoon${name}.`;
-  return `Good evening${name}.`;
-};
 
 const ACTION_MESSAGES: Record<string, string> = {
   navigate_sessions: 'Navigating to your sessions!',
@@ -24,7 +17,11 @@ const ACTION_MESSAGES: Record<string, string> = {
 
 const NAVIGATING_ACTIONS = new Set(['navigate_sessions', 'navigate_metrics', 'navigate_profile']);
 
-const AgentPrompt = () => {
+interface AgentPromptProps {
+  greetingReady?: boolean;
+}
+
+const AgentPrompt = ({ greetingReady = true }: AgentPromptProps) => {
   const { user, requestHighlightSession } = useAuth();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -103,9 +100,19 @@ const AgentPrompt = () => {
 
   return (
     <div className="agent-prompt">
-      <h1 className="agent-greeting">
-        {getGreeting(user?.username)}
-      </h1>
+      {greetingReady ? (
+        <motion.h1
+          className="agent-greeting"
+          layoutId="greeting-text"
+          transition={{ duration: 0.65, ease: [0.25, 0.46, 0.45, 0.94] }}
+        >
+          {getGreeting(user?.username)}
+        </motion.h1>
+      ) : (
+        <h1 className="agent-greeting" style={{ opacity: 0, pointerEvents: 'none' }} aria-hidden>
+          {getGreeting(user?.username)}
+        </h1>
+      )}
       <div className="agent-input-wrap">
         <input
           className="agent-input"
