@@ -1,3 +1,4 @@
+import { useAuth } from '../../context/AuthContext';
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import type { ChartConfiguration } from 'chart.js';
@@ -162,6 +163,8 @@ function DiamondWheel({ weekData }: { weekData: DayMetric[] }) {
 }
 
 const Metrics = () => {
+  const { user } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL;
   const [range, setRange]         = useState<Range>('7D');
   const [focusData, setFocusData] = useState<number[]>([]);
   const [eyeData,   setEyeData]   = useState<number[]>([]);
@@ -172,23 +175,48 @@ const Metrics = () => {
   const chartRef  = useRef<Chart | null>(null);
 
   useEffect(() => {
-    const count = range === '7D' ? 7 : range === '1M' ? 30 : 12;
-    setFocusData(Array.from({ length: count }, () => Math.round(55 + Math.random() * 40)));
-    setEyeData(Array.from({ length: count }, () => Math.round(60 + Math.random() * 35)));
+  if (!user) return;
+  const fetchLineData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
+        { credentials: 'include' }
+      );
+      const json = await res.json();
+      if (json.success) {
+  if (json.data.length > 0) {
+    setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
+    setEyeData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
+  } else {
     setLoading(false);
-  }, [range]);
+  }
+}
+    } catch (err) {
+      console.error('Failed to fetch focus data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchLineData();
+}, [range, user]);
 
   useEffect(() => {
-    setWeekData([
-      { focus: 82, eye: 88, deep: 78, duration: '1h 42m', distractions: 3  },
-      { focus: 75, eye: 80, deep: 70, duration: '55m',    distractions: 7  },
-      { focus: 91, eye: 94, deep: 88, duration: '2h 10m', distractions: 2  },
-      { focus: 68, eye: 74, deep: 60, duration: '48m',    distractions: 14 },
-      { focus: 85, eye: 87, deep: 82, duration: '1h 20m', distractions: 4  },
-      { focus: 60, eye: 65, deep: 50, duration: '30m',    distractions: 10 },
-      { focus: 72, eye: 78, deep: 66, duration: '1h 05m', distractions: 6  },
-    ]);
-  }, []);
+  if (!user) return;
+  const fetchWeekData = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/metrics/weekly-summary/${user.userId}`,
+        { credentials: 'include' }
+      );
+      const json = await res.json();
+      if (json.success) setWeekData(json.data);
+    } catch (err) {
+      console.error('Failed to fetch weekly data:', err);
+    }
+  };
+  fetchWeekData();
+}, [user]);
 
   useEffect(() => {
     if (!canvasRef.current || focusData.length === 0) return;
