@@ -33,13 +33,14 @@ const Profile = () => {
   } = useSettings();
 
   const THEME_META: Record<Theme, { label: string; bg: string; accent: string }> = {
-    dark:   { label: 'Dark',   bg: '#1a1a1a', accent: '#646cff' },
-    light:  { label: 'Light',  bg: '#ffffff', accent: '#4f46e5' },
-    ocean:  { label: 'Ocean',  bg: '#0d1b2a', accent: '#0ea5e9' },
-    forest: { label: 'Forest', bg: '#111f11', accent: '#22c55e' },
-    sunset: { label: 'Sunset', bg: '#1f1200', accent: '#f97316' },
-    nord:   { label: 'Nord',   bg: '#2e3440', accent: '#88c0d0' },
-    rose:   { label: 'Rose',   bg: '#fff0f2', accent: '#f43f5e' },
+    dark:      { label: 'Dark',             bg: '#1a1a1a', accent: '#646cff' },
+    light:     { label: 'Light',            bg: '#ffffff', accent: '#4f46e5' },
+    sunset:    { label: 'Fresh Peach',      bg: '#fff5ee', accent: '#E39A7B' },
+    rose:      { label: 'Rose',             bg: '#fff0f2', accent: '#f43f5e' },
+    stormy:    { label: 'Stormy Morning',   bg: '#243040', accent: '#88BDF2' },
+    hydrangea: { label: 'Hydrangea',        bg: '#fff0f8', accent: '#AD56C4' },
+    pistachio: { label: 'Pistachio Dream',  bg: '#edf7e5', accent: '#42D674' },
+    softspring: { label: 'Soft Spring',     bg: '#f0f6ff', accent: '#6395EE' },
   };
 
   const selectedAvatar = AVATAR_PRESETS.find(a => a.id === avatarId) ?? AVATAR_PRESETS[0];
