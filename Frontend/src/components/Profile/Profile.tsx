@@ -416,9 +416,11 @@ const Profile = () => {
 
         <div className="settings-group">
           <p className="settings-group-label">Appearance</p>
-          <div className="settings-row-info" style={{ marginBottom: 12 }}>
-            <span className="settings-row-title">Color Theme</span>
-            <span className="settings-row-desc">Choose your preferred color theme</span>
+          <div className="settings-row" style={{ marginBottom: 12 }}>
+            <div className="settings-row-info">
+              <span className="settings-row-title">Color Theme</span>
+              <span className="settings-row-desc">Choose your preferred color theme</span>
+            </div>
           </div>
           <div className="theme-grid">
             {THEMES.map(t => {
