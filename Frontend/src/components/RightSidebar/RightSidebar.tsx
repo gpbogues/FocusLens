@@ -135,6 +135,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
           sessionName: name,
           sessionDescription: description,
           activeDuration: pendingActiveDurationRef.current,
+          avgFocus: 75,
         }),
       });
       const data = await res.json();

@@ -202,9 +202,9 @@ if (process.env.NODE_ENV !== "production") {
 //UserSession API, saves user info into db after ending session
 //Note that avgFocus is set to 0, update when data could be fetched for it
 app.post("/session", async (req, res) => {
-  const { userId, sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration } = req.body;
+  const { userId, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration } = req.body;
   try {
-    stmtInsertSession.run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription, activeDuration ?? 0);
+    stmtInsertSession.run(userId, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration ?? 0);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
