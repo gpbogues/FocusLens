@@ -1,7 +1,7 @@
 .preloader-bg-overlay {
   position: fixed;
   inset: 0;
-  background-color: var(--color-bg-surface);
+  background-color: var(--color-bg-deep);
   z-index: 1000;
 }
 
