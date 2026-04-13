@@ -1,13 +1,15 @@
 .metrics-page {
-  width: 100%;
+  width: 96.5%;
   height: 100%;
+  padding: 30px;
+  margin-bottom: 30px;
 }
 
 .metrics-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 5px;
 }
 
 .metrics-section {
@@ -38,7 +40,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 25px;
 }
 
 .metrics-card-title {
