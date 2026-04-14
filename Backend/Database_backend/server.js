@@ -951,10 +951,11 @@ app.delete("/user/account", async (req, res) => {
 // Agent intent classification via Groq API
 const AGENT_SYSTEM_PROMPT = `You are an intent classifier for FocusLens, a focus-tracking app.
 Classify the user message into exactly one of these actions:
-- navigate_sessions: user wants to view their past sessions or history
+- navigate_sessions: user wants to view their past sessions or browse session history
+- navigate_sessions_folders: user wants to organize sessions, create or manage folders, or restructure their session history
+- open_session_snapshot: user wants a quick or brief overview of their most recent sessions without leaving Home
 - navigate_metrics: user wants to see focus metrics, analytics, or stats
 - navigate_profile: user wants to edit their profile or settings
-- start_session: user wants to start a new focus/work session
 - unknown: input does not clearly match any action above
 
 Respond with ONLY a valid JSON object, no explanation, no markdown:

@@ -35,6 +35,9 @@ interface AuthContextType {
   highlightSession: boolean;
   requestHighlightSession: () => void;
   clearHighlightSession: () => void;
+  openSnapshot: boolean;
+  requestOpenSnapshot: () => void;
+  clearOpenSnapshot: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -46,6 +49,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [sessionTrigger, setSessionTrigger] = useState(0);
   const [initialSettings, setInitialSettings] = useState<InitialSettings | null>(null);
   const [highlightSession, setHighlightSession] = useState(false);
+  const [openSnapshot, setOpenSnapshot] = useState(false);
 
   //On mount, call /init to repopulates session and prefetch settings in one round-trip
   useEffect(() => {
@@ -87,9 +91,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const notifySessionSaved = () => setSessionTrigger(prev => prev + 1);
   const requestHighlightSession = () => setHighlightSession(true);
   const clearHighlightSession = () => setHighlightSession(false);
+  const requestOpenSnapshot = () => setOpenSnapshot(true);
+  const clearOpenSnapshot = () => setOpenSnapshot(false);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved, initialSettings, highlightSession, requestHighlightSession, clearHighlightSession }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, sessionTrigger, notifySessionSaved, initialSettings, highlightSession, requestHighlightSession, clearHighlightSession, openSnapshot, requestOpenSnapshot, clearOpenSnapshot }}>
       {children}
     </AuthContext.Provider>
   );

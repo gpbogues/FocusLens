@@ -4,6 +4,20 @@ import { Chart, registerables } from 'chart.js';
 import type { ChartConfiguration } from 'chart.js';
 import './Metrics.css';
 
+/*
+TODO:
+
+Bug:
+  User session duration doesn't seem to update properly.
+
+To add:
+  Graph filtering, user can select graph lines to display/hide 
+  Add in pulling of info for avgFocus, avgEyeContact for focus over time
+  Add in better filtering for user session dates, based off of wks of
+  Update user session date selection icons for clarity
+
+*/
+
 Chart.register(...registerables);
 
 type Range = '7D' | '1M' | '1Y';
