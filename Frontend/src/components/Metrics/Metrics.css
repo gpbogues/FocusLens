@@ -1,5 +1,5 @@
 .metrics-page {
-  width: 97%;
+  width: 97.5%;
   height: 100%;
   padding: 30px;
   padding-bottom: 60px;
@@ -9,7 +9,7 @@
   font-size: 24px;
   color: var(--color-text-bright);
   margin-bottom: 0px;
-  
+  font-weight: 600;
 }
 
 .metrics-header {
@@ -286,4 +286,30 @@
 .metrics-day-tab:hover:not(.active) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+/* ── legend toggle buttons ─────────────────────────────── */
+
+.metrics-legend-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--color-text-muted);
+}
+
+.metrics-legend-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.metrics-legend-btn.legend-off {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.metrics-legend-btn.legend-off span {
+  text-decoration: line-through;
 }
