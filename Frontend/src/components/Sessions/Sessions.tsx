@@ -3,6 +3,16 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Sessions.css';
 
+/*
+TODOS:
+
+update tab buttons to improve visuals 
+
+cont monitor slow requests times >2000ms delays,
+db should be fine, issue might be with rendering and fetching requests,
+mostly with redundant fetch 
+*/
+
 interface Session {
   SessionID: number;
   sessionStart: string;
@@ -131,14 +141,11 @@ const Sessions = () => {
   const [modalInput, setModalInput] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
 
-  //Tab state
-  const [activeTab, setActiveTab] = useState<Tab>('sessions');
-
-  useEffect(() => {
+  //Tab state, initialised from navigation state to avoid a second render/double-fetch on mount
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
     const state = location.state as { tab?: Tab } | null;
-    if (state?.tab === 'folders') setActiveTab('folders');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return state?.tab === 'folders' ? 'folders' : 'sessions';
+  });
 
   //Folder state
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -180,6 +187,7 @@ const Sessions = () => {
   useEffect(() => {
     if (!user) return;
     if (activeTab === 'folders' && !activeFolderDetail) return;
+    const controller = new AbortController();
     setIsLoading(true);
     const params = new URLSearchParams({
       page: String(page),
@@ -191,7 +199,7 @@ const Sessions = () => {
     const url = activeFolderDetail
       ? `${API_URL}/folders/${activeFolderDetail.FolderID}/sessions?${params}`
       : `${API_URL}/sessions/paginated/${user.userId}?${params}`;
-    fetch(url, { credentials: 'include' })
+    fetch(url, { credentials: 'include', signal: controller.signal })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
@@ -199,18 +207,20 @@ const Sessions = () => {
           setTotal(data.total);
         }
       })
-      .catch(err => console.error('Sessions fetch error:', err))
+      .catch(err => { if (err.name !== 'AbortError') console.error('Sessions fetch error:', err); })
       .finally(() => setIsLoading(false));
+    return () => controller.abort();
   }, [user, page, search, sortBy, sortDir, sessionTrigger, refreshTick, activeFolderDetail, activeTab]);
 
   //Fetch folders (always kept fresh for picker and folder tab)
+  //activeTab intentionally excluded — folders don't change on tab switch
   useEffect(() => {
     if (!user) return;
     fetch(`${API_URL}/folders/${user.userId}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => { if (data.success) setFolders(data.folders); })
       .catch(err => console.error('Folders fetch error:', err));
-  }, [user, folderRefreshTick, activeTab]);
+  }, [user, folderRefreshTick]);
 
   //Close session dropdown on outside click
   useEffect(() => {
