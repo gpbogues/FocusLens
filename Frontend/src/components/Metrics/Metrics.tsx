@@ -351,7 +351,9 @@ const Metrics = () => {
         <div className="metrics-card">
           <div className="metrics-card-header">
             <div>
-              <p className="metrics-section-label">Monthly review</p>
+              <p className="metrics-section-label">
+              {range === '7D' ? '7 day review' : range === '1M' ? 'Monthly review' : 'Yearly review'}
+             </p>
               <h3 className="metrics-card-title">Focus over time</h3>
             </div>
             <div className="metrics-range-toggle">
