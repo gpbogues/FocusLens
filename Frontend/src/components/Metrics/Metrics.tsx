@@ -11,7 +11,6 @@ Bug:
   User session duration doesn't seem to update properly.
 
 To add:
-  Graph filtering, user can select graph lines to display/hide 
   Add in pulling of info for avgFocus, avgEyeContact for focus over time
   Add in better filtering for user session dates, based off of wks of
   Update user session date selection icons for clarity
@@ -42,7 +41,6 @@ function getLabels(range: Range): string[] {
 const avg = (arr: number[]) =>
   arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
 
-//Read a CSS variable value at runtime so chart colors match the active theme
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -210,20 +208,21 @@ const Metrics = () => {
   const { user } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
 
-  //Chart data state
-  const [range, setRange] = useState<Range>('7D');
-  const [focusData, setFocusData] = useState<number[]>([]);
-  const [eyeData, setEyeData] = useState<number[]>([]);
+  const [range, setRange]               = useState<Range>('7D');
+  const [focusData, setFocusData]       = useState<number[]>([]);
+  const [eyeData, setEyeData]           = useState<number[]>([]);
   const [sessionCount, setSessionCount] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
+  const [weekData, setWeekData]         = useState<DayMetric[]>([]);
 
-  //Diamond wheel state
-  const [weekData, setWeekData] = useState<DayMetric[]>([]);
+  // ── graph toggle state ────────────────────────────────────────────────────
+  const [showFocus, setShowFocus] = useState(true);
+  const [showEye,   setShowEye]   = useState(true);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<Chart | null>(null);
+  const chartRef  = useRef<Chart | null>(null);
 
-  //Fetch line chart data when range or user changes
+  // ── fetch line chart data ─────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const fetchLineData = async () => {
@@ -250,7 +249,7 @@ const Metrics = () => {
     fetchLineData();
   }, [range, user]);
 
-  //Fetch weekly diamond data
+  // ── fetch weekly diamond data ─────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const fetchWeekData = async () => {
@@ -268,7 +267,7 @@ const Metrics = () => {
     fetchWeekData();
   }, [user]);
 
-  //Build chart using theme-aware colors
+  // ── build / update chart ──────────────────────────────────────────────────
   useEffect(() => {
     if (!canvasRef.current || focusData.length === 0) return;
     chartRef.current?.destroy();
@@ -278,6 +277,7 @@ const Metrics = () => {
     const muted   = cssVar('--color-text-muted')  || '#6b7280';
     const border  = cssVar('--color-border')      || '#404040';
     const bright  = cssVar('--color-text-bright') || '#e5e7eb';
+    const elevated = cssVar('--color-bg-elevated') || '#242424';
 
     const config: ChartConfiguration = {
       type: 'line',
@@ -286,46 +286,38 @@ const Metrics = () => {
         datasets: [
           {
             label: 'Focus Score',
-            data: focusData,
+            data: showFocus ? focusData : [],
             borderColor: accent,
             backgroundColor: accent + '26',
-            fill: true,
-            tension: 0.45,
-            pointRadius: 3,
+            fill: true, tension: 0.45, pointRadius: 3,
             pointBackgroundColor: accent,
-            pointBorderColor: cssVar('--color-bg-elevated') || '#242424',
-            pointBorderWidth: 2,
-            borderWidth: 2,
+            pointBorderColor: elevated,
+            pointBorderWidth: 2, borderWidth: 2,
+            hidden: !showFocus,
           },
           {
             label: 'Eye Contact %',
-            data: eyeData,
+            data: showEye ? eyeData : [],
             borderColor: success,
             backgroundColor: success + '1e',
-            fill: true,
-            tension: 0.45,
-            pointRadius: 3,
+            fill: true, tension: 0.45, pointRadius: 3,
             pointBackgroundColor: success,
-            pointBorderColor: cssVar('--color-bg-elevated') || '#242424',
-            pointBorderWidth: 2,
-            borderWidth: 2,
+            pointBorderColor: elevated,
+            pointBorderWidth: 2, borderWidth: 2,
             borderDash: [5, 3],
+            hidden: !showEye,
           },
         ],
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: cssVar('--color-bg-surface') || '#1a1a1a',
-            borderColor: border,
-            borderWidth: 1,
-            titleColor: bright,
-            bodyColor: muted,
-            padding: 12,
+            borderColor: border, borderWidth: 1,
+            titleColor: bright, bodyColor: muted, padding: 12,
             callbacks: { label: (ctx: any) => ` ${ctx.dataset.label}: ${Math.round(ctx.raw as number)}` },
           },
         },
@@ -336,8 +328,7 @@ const Metrics = () => {
             border: { color: border },
           },
           y: {
-            min: 0,
-            max: 100,
+            min: 0, max: 100,
             grid: { color: border + '44' },
             ticks: { color: muted, font: { size: 11 }, stepSize: 20 },
             border: { color: border },
@@ -348,7 +339,7 @@ const Metrics = () => {
 
     chartRef.current = new Chart(canvasRef.current, config);
     return () => chartRef.current?.destroy();
-  }, [focusData, eyeData, range]);
+  }, [focusData, eyeData, range, showFocus, showEye]);
 
   return (
     <div className="metrics-page">
@@ -403,18 +394,29 @@ const Metrics = () => {
             ))}
           </div>
 
+          {/* clickable legend toggles */}
           <div className="metrics-legend">
-            {[
-              { label: 'Focus score',   varName: '--color-accent',  dashed: false },
-              { label: 'Eye contact %', varName: '--color-success', dashed: true  },
-            ].map(({ label, varName, dashed }) => (
-              <div key={label} className="metrics-legend-item">
-                <svg width="22" height="10" viewBox="0 0 22 10">
-                  <line x1="0" y1="5" x2="22" y2="5" stroke={`var(${varName})`} strokeWidth="2" strokeDasharray={dashed ? '5 3' : 'none'} />
-                </svg>
-                <span>{label}</span>
-              </div>
-            ))}
+            <button
+              className={`metrics-legend-item metrics-legend-btn ${!showFocus ? 'legend-off' : ''}`}
+              onClick={() => setShowFocus(v => !v)}
+              title={showFocus ? 'Hide focus score' : 'Show focus score'}
+            >
+              <svg width="22" height="10" viewBox="0 0 22 10">
+                <line x1="0" y1="5" x2="22" y2="5" stroke="var(--color-accent)" strokeWidth="2" />
+              </svg>
+              <span>Focus score</span>
+            </button>
+
+            <button
+              className={`metrics-legend-item metrics-legend-btn ${!showEye ? 'legend-off' : ''}`}
+              onClick={() => setShowEye(v => !v)}
+              title={showEye ? 'Hide eye contact' : 'Show eye contact'}
+            >
+              <svg width="22" height="10" viewBox="0 0 22 10">
+                <line x1="0" y1="5" x2="22" y2="5" stroke="var(--color-success)" strokeWidth="2" strokeDasharray="5 3" />
+              </svg>
+              <span>Eye contact %</span>
+            </button>
           </div>
 
           {loading ? (
