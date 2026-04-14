@@ -77,7 +77,7 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
       //  Because ctrlX > edgeX throughout, the middle bulges outward.
       //  Both land on W at the end, clean flat rectangle, no snap.
       ctrlAnim1.current = animate(ctrlX, SIDEBAR_W, {
-        duration: OPEN_DUR * 0.55,
+        duration: OPEN_DUR * 0.80,
         ease: EASE,
       });
       edgeAnim.current = animate(edgeX, SIDEBAR_W, {
@@ -89,12 +89,12 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
       //  edgeX retracts quickly (65% of close duration).
       //  ctrlX starts after a short delay and finishes last.
       edgeAnim.current = animate(edgeX, 0, {
-        duration: CLOSE_DUR * 0.65,
+        duration: CLOSE_DUR * 0.78,
         ease: EASE,
       });
       ctrlAnim1.current = animate(ctrlX, 0, {
-        delay: CLOSE_DUR * 0.15,
-        duration: CLOSE_DUR * 0.85,
+        delay: CLOSE_DUR * 0.06,
+        duration: CLOSE_DUR * 0.75,
         ease: EASE,
       });
     }
