@@ -3,6 +3,14 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Sessions.css';
 
+
+/*
+Note:
+NS_BINDING_ABORTED error when switching to sessions page within networks is expected,
+due to strictMode of react dev mode, mount fires twice causing this.
+*/
+
+
 /*
 TODOS:
 
@@ -208,7 +216,7 @@ const Sessions = () => {
         }
       })
       .catch(err => { if (err.name !== 'AbortError') console.error('Sessions fetch error:', err); })
-      .finally(() => setIsLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setIsLoading(false); });
     return () => controller.abort();
   }, [user, page, search, sortBy, sortDir, sessionTrigger, refreshTick, activeFolderDetail, activeTab]);
 
