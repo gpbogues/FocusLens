@@ -200,8 +200,7 @@ const stmtWeeklySummary = db.prepare(
    FROM UserSession s
    LEFT JOIN SessionChunk c ON c.SessionID = s.SessionID
    WHERE s.UserID = ?
-     AND s.sessionStart >= datetime('now', 'weekday 0', '-7 days')
-     AND s.sessionStart <  datetime('now', 'weekday 0')
+     AND s.sessionStart >= datetime('now','-7 days')
    GROUP BY DATE(s.sessionStart)
    ORDER BY day ASC`
 );
