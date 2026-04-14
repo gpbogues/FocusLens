@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Sessions.css';
 
@@ -110,6 +111,7 @@ const DotsIcon = () => (
 
 const Sessions = () => {
   const { user, sessionTrigger } = useAuth();
+  const location = useLocation();
   const API_URL = import.meta.env.VITE_API_URL;
 
   // Sessions state
@@ -131,6 +133,12 @@ const Sessions = () => {
 
   //Tab state
   const [activeTab, setActiveTab] = useState<Tab>('sessions');
+
+  useEffect(() => {
+    const state = location.state as { tab?: Tab } | null;
+    if (state?.tab === 'folders') setActiveTab('folders');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   //Folder state
   const [folders, setFolders] = useState<Folder[]>([]);
