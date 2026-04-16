@@ -135,7 +135,7 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
     }, 400);
   };
 
-  const routes = ['profile', 'sessions', 'metrics'] as const;
+  const routes = ['profile', 'sessions', 'metrics', 'about', 'studies'] as const;
 
   return (
     //Always mounted, visibility is driven entirely by motion values, not mounting.
