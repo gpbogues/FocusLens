@@ -139,12 +139,6 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid
     ON SessionFolderMap(SessionID);
-
-  CREATE INDEX IF NOT EXISTS idx_usersession_metrics_covering
-    ON UserSession(UserID, sessionStart, avgFocus, activeDuration);
-
-  CREATE INDEX IF NOT EXISTS idx_sessionchunk_sessionid_status
-    ON SessionChunk(SessionID, chunkStatus);
 `);
 
 console.log("Connected to SQLite:", process.env.DB_PATH || "./focuslens.db");
@@ -166,43 +160,6 @@ const stmtInsertSession = db.prepare(
 );
 const stmtGetRecentSessions = db.prepare(
   "SELECT sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 4"
-);
-
-//Metrics statements (one per range variant, SQL differs so each must be its own statement)
-//also prepare shouldnt be called on every request, only once at start 
-const stmtFocusOverTime7D = db.prepare(
-  `SELECT DATE(sessionStart) AS label, AVG(avgFocus) AS focusScore, COUNT(*) AS sessionCount, SUM(activeDuration) AS totalDuration
-   FROM UserSession
-   WHERE UserID = ? AND sessionStart >= datetime('now', '-7 days')
-   GROUP BY DATE(sessionStart) ORDER BY label ASC`
-);
-const stmtFocusOverTime1M = db.prepare(
-  `SELECT DATE(sessionStart) AS label, AVG(avgFocus) AS focusScore, COUNT(*) AS sessionCount, SUM(activeDuration) AS totalDuration
-   FROM UserSession
-   WHERE UserID = ? AND sessionStart >= datetime('now', '-30 days')
-   GROUP BY DATE(sessionStart) ORDER BY label ASC`
-);
-const stmtFocusOverTime1Y = db.prepare(
-  `SELECT strftime('%Y-%m', sessionStart) AS label, AVG(avgFocus) AS focusScore, COUNT(*) AS sessionCount, SUM(activeDuration) AS totalDuration
-   FROM UserSession
-   WHERE UserID = ? AND sessionStart >= datetime('now', '-12 months')
-   GROUP BY strftime('%Y-%m', sessionStart) ORDER BY label ASC`
-);
-const stmtWeeklySummary = db.prepare(
-  `SELECT
-     DATE(s.sessionStart)                                            AS day,
-     strftime('%w', s.sessionStart)                                  AS dayOfWeek,
-     ROUND(AVG(s.avgFocus), 1)                                       AS focus,
-     COUNT(DISTINCT s.SessionID)                                     AS sessionCount,
-     SUM(s.activeDuration)                                           AS totalDuration,
-     SUM(CASE WHEN c.chunkStatus IN ('VF','SF') THEN 1 ELSE 0 END)   AS focusedChunks,
-     COUNT(c.ChunkId)                                                AS totalChunks
-   FROM UserSession s
-   LEFT JOIN SessionChunk c ON c.SessionID = s.SessionID
-   WHERE s.UserID = ?
-     AND s.sessionStart >= datetime('now','-7 days')
-   GROUP BY DATE(s.sessionStart)
-   ORDER BY day ASC`
 );
 
 //Looks up real cognito username via email filter before deleting,
@@ -245,13 +202,42 @@ if (process.env.NODE_ENV !== "production") {
 //UserSession API, saves user info into db after ending session
 //Note that avgFocus is set to 0, update when data could be fetched for it
 app.post("/session", async (req, res) => {
-  const { userId, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration } = req.body;
+  const { userId, sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration } = req.body;
   try {
-    stmtInsertSession.run(userId, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration ?? 0);
+    stmtInsertSession.run(userId, sessionStart, sessionEnd, 0, sessionName, sessionDescription, activeDuration ?? 0);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Session insert error" });
+  }
+});
+
+//Pre-creates a UserSession row when the user clicks Start Session, returns the sessionId
+//so dmb.py can tag focus chunks against a real DB row from the start
+app.post("/session/start", (req, res) => {
+  const { userId, sessionStart } = req.body;
+  try {
+    const result = db.prepare(
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration) VALUES (?, ?, ?, 0, '', '', 0)"
+    ).run(userId, sessionStart, sessionStart);
+    res.json({ success: true, sessionId: result.lastInsertRowid });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Session start error" });
+  }
+});
+
+//Inserts a 5-minute focus chunk sent by dmb.py (called every 5 active minutes and on session end)
+app.post("/session/chunk", (req, res) => {
+  const { sessionId, userId, chunkStatus } = req.body;
+  try {
+    db.prepare(
+      "INSERT INTO SessionChunk (SessionID, UserID, chunkStatus) VALUES (?, ?, ?)"
+    ).run(sessionId, userId, chunkStatus);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Chunk insert error" });
   }
 });
 
@@ -284,58 +270,6 @@ app.get("/sessions/metrics/monthly/:userId", (req, res) => {
   } catch (err) {
     console.error("Monthly metrics error:", err);
     res.status(500).json({ success: false, message: "Failed to fetch monthly metrics" });
-  }
-});
-
-// Returns avgFocus per day/month/year for the line graph
-app.get("/metrics/focus-over-time/:userId", (req, res) => {
-  const { userId } = req.params;
-  const range = req.query.range || "7D";
-
-  const stmtMap = {
-    "7D": stmtFocusOverTime7D,
-    "1M": stmtFocusOverTime1M,
-    "1Y": stmtFocusOverTime1Y,
-  };
-  const stmt = stmtMap[range];
-  if (!stmt) return res.status(400).json({ success: false, message: "Invalid range" });
-
-  try {
-    const rows = stmt.all(userId);
-    res.json({ success: true, data: rows });
-  } catch (err) {
-    console.error("focus-over-time error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch focus over time" });
-  }
-});
-
-// Returns one row per day-of-week for the current week
-app.get("/metrics/weekly-summary/:userId", (req, res) => {
-  const { userId } = req.params;
-  try {
-    const rows = stmtWeeklySummary.all(userId);
-
-    const week = Array.from({ length: 7 }, () => ({
-      focus: 0, eye: 0, deep: 0, duration: "0m", distractions: 0,
-    }));
-
-    rows.forEach(row => {
-      const dow = (parseInt(row.dayOfWeek) + 6) % 7;
-      const focusedRatio = row.totalChunks > 0 ? row.focusedChunks / row.totalChunks : 0;
-      const mins = Math.round((row.totalDuration || 0) / 60);
-      week[dow] = {
-        focus:        Math.round(row.focus || 0),
-        eye:          0,
-        deep:         Math.round(focusedRatio * 100),
-        duration:     mins >= 60 ? `${Math.floor(mins/60)}h ${mins % 60}m` : `${mins}m`,
-        distractions: Math.max(0, row.totalChunks - row.focusedChunks),
-      };
-    });
-
-    res.json({ success: true, data: week });
-  } catch (err) {
-    console.error("weekly-summary error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch weekly summary" });
   }
 });
 
@@ -377,14 +311,31 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
   }
 });
 
-//Updates session name and/or description
+//Updates session fields. When called after a session ends, also sets sessionEnd,
+//activeDuration, and calculates avgFocus from the session's focus chunks.
+//VF=3 (Very Focused), SF=2 (Slightly Focused), SU=1 (Slightly Unfocused), VU=0 (Very Unfocused)
 app.patch("/sessions/:sessionId", (req, res) => {
   const { sessionId } = req.params;
-  const { sessionName, sessionDescription } = req.body;
+  const { sessionName, sessionDescription, sessionEnd, activeDuration } = req.body;
   try {
-    db.prepare(
-      "UPDATE UserSession SET sessionName = ?, sessionDescription = ? WHERE SessionID = ?"
-    ).run(sessionName, sessionDescription ?? null, sessionId);
+    if (sessionEnd !== undefined) {
+      //Finalizing session: compute avgFocus from chunks then update all fields
+      const focusRow = db.prepare(`
+        SELECT AVG(CASE chunkStatus
+          WHEN 'VF' THEN 3 WHEN 'SF' THEN 2
+          WHEN 'SU' THEN 1 WHEN 'VU' THEN 0
+        END) as avg FROM SessionChunk WHERE SessionID = ?
+      `).get(sessionId);
+      const avgFocus = focusRow?.avg ?? 0;
+      db.prepare(
+        "UPDATE UserSession SET sessionName = ?, sessionDescription = ?, sessionEnd = ?, activeDuration = ?, avgFocus = ? WHERE SessionID = ?"
+      ).run(sessionName, sessionDescription ?? null, sessionEnd, activeDuration ?? 0, avgFocus, sessionId);
+    } else {
+      //Partial update: just name and description (e.g. from Sessions page edit)
+      db.prepare(
+        "UPDATE UserSession SET sessionName = ?, sessionDescription = ? WHERE SessionID = ?"
+      ).run(sessionName, sessionDescription ?? null, sessionId);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -950,11 +901,10 @@ app.delete("/user/account", async (req, res) => {
 // Agent intent classification via Groq API
 const AGENT_SYSTEM_PROMPT = `You are an intent classifier for FocusLens, a focus-tracking app.
 Classify the user message into exactly one of these actions:
-- navigate_sessions: user wants to view their past sessions or browse session history
-- navigate_sessions_folders: user wants to organize sessions, create or manage folders, or restructure their session history
-- open_session_snapshot: user wants a quick or brief overview of their most recent sessions without leaving Home
+- navigate_sessions: user wants to view their past sessions or history
 - navigate_metrics: user wants to see focus metrics, analytics, or stats
 - navigate_profile: user wants to edit their profile or settings
+- start_session: user wants to start a new focus/work session
 - unknown: input does not clearly match any action above
 
 Respond with ONLY a valid JSON object, no explanation, no markdown:
