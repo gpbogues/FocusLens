@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import WebcamFeed from '../WebcamFeed/WebcamFeed';
 import { useAuth } from '../../context/AuthContext';
 import './RightSidebar.css';
@@ -11,6 +11,9 @@ interface RightSidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
+
+// dmb.py Flask server — always runs locally on the user's machine
+const DMB_URL = 'http://localhost:5000';
 
 //Format stored time to fit with sql timedate format
 //Updated to return user current time based off of local timezone,
@@ -49,11 +52,29 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
   const [isSaving, setIsSaving] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
-  //Date.now() accumulator for active time tracking 
+  //Date.now() accumulator for active time tracking
   const accumulatedMsRef = useRef<number>(0);
   const lastResumeAtRef = useRef<number>(0);
   //Ref to capture activeDuration at stop time, used in the save modal
   const pendingActiveDurationRef = useRef<number>(0);
+  //Pre-created session ID — assigned on Start, used for chunks and finalization
+  const sessionIdRef = useRef<number | null>(null);
+
+  //Tracker online/offline status (polls dmb.py every 5s)
+  const [trackerOnline, setTrackerOnline] = useState(false);
+  //Show/hide camera feed — toggle is purely cosmetic, tracking always runs when session is active
+  const [showFeed, setShowFeed] = useState(true);
+
+  //Poll dmb.py status endpoint to detect if the local tracker is running
+  useEffect(() => {
+    const check = () =>
+      fetch(`${DMB_URL}/api/status`, { signal: AbortSignal.timeout(2000) })
+        .then(() => setTrackerOnline(true))
+        .catch(() => setTrackerOnline(false));
+    check();
+    const id = setInterval(check, 5000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleToggleSession = async () => {
     if (!isSessionActive) {
@@ -63,6 +84,28 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       const startTime = toMySQLDateTime();
       setSessionStart(startTime);
       setSessionEnd('');
+
+      //Pre-create the session in DB so dmb.py has a real sessionId for chunk tagging
+      try {
+        const startRes = await fetch(`${API_URL}/session/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user?.userId, sessionStart: startTime }),
+        });
+        const startData = await startRes.json();
+        sessionIdRef.current = startData.sessionId ?? null;
+      } catch (err) {
+        console.error('Failed to pre-create session:', err);
+        sessionIdRef.current = null;
+      }
+
+      //Tell dmb.py to open camera and begin tracking (best-effort — works even if offline)
+      fetch(`${DMB_URL}/api/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, sessionId: sessionIdRef.current }),
+      }).catch(() => console.warn('[dmb.py] unreachable on start'));
+
       onToggleSession();
     } else {
       //Stopping session: finalize active duration, capture end time, show save prompt
@@ -73,6 +116,11 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       const endTime = toMySQLDateTime();
       setSessionEnd(endTime);
       setPendingEndTime(endTime);
+
+      //Signal dmb.py to flush the final chunk and release the camera
+      fetch(`${DMB_URL}/api/session/end`, { method: 'POST' })
+        .catch(() => console.warn('[dmb.py] unreachable on end'));
+
       onToggleSession();
       setSaveModal('confirm');
     }
@@ -86,13 +134,21 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       //Resuming: reset the resume anchor
       lastResumeAtRef.current = Date.now();
     }
+    //Toggle dmb.py pause/resume (best-effort)
+    fetch(`${DMB_URL}/api/session/pause`, { method: 'POST' })
+      .catch(() => console.warn('[dmb.py] unreachable on pause'));
     onPauseSession();
   };
 
   //Modal 1: user chose No = discard session
   const handleSaveNo = () => {
     setSaveModal(null);
-    console.log('RightSidebar: user chose not to save session, session discarded');
+    //Delete the pre-created session so it doesn't linger in the DB
+    if (sessionIdRef.current) {
+      fetch(`${API_URL}/sessions/${sessionIdRef.current}`, { method: 'DELETE' })
+        .catch(() => {});
+      sessionIdRef.current = null;
+    }
   };
 
   //Modal 1: user chose Yes = open details form with defaults pre-filled
@@ -107,10 +163,15 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
   //Modal 2: user cancelled = discard session
   const handleDetailsCancel = () => {
     setSaveModal(null);
-    console.log('RightSidebar: user cancelled save, session discarded');
+    //Delete the pre-created session so it doesn't linger in the DB
+    if (sessionIdRef.current) {
+      fetch(`${API_URL}/sessions/${sessionIdRef.current}`, { method: 'DELETE' })
+        .catch(() => {});
+      sessionIdRef.current = null;
+    }
   };
 
-  //Modal 2: user confirmed = POST session to backend
+  //Modal 2: user confirmed = PATCH session with final data
   const handleDetailsConfirm = async () => {
     if (isSaving) return;
     setIsSaving(true);
@@ -118,6 +179,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     const name = sessionName.trim() || defaultName;
     const description = sessionDescription.trim() || 'No Description';
 
+    console.log('sessionId:', sessionIdRef.current);
     console.log('userId:', user?.userId);
     console.log('sessionStart:', sessionStart);
     console.log('sessionEnd:', pendingEndTime);
@@ -125,12 +187,10 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     console.log('sessionDescription:', description);
 
     try {
-      const res = await fetch(`${API_URL}/session`, {
-        method: 'POST',
+      const res = await fetch(`${API_URL}/sessions/${sessionIdRef.current}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user?.userId,
-          sessionStart,
           sessionEnd: pendingEndTime,
           sessionName: name,
           sessionDescription: description,
@@ -149,6 +209,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       console.error('Failed to save session:', err);
     }
 
+    sessionIdRef.current = null;
     setIsSaving(false);
     setSaveModal(null);
   };
@@ -166,9 +227,28 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
           </button>
         </div>
         <div className="sidebar-content">
-          <div className="webcam-container">
-            <WebcamFeed isActive={isSessionActive} />
+          {/* Tracker status indicator + feed visibility toggle */}
+          <div className="tracker-status">
+            <div className="tracker-status-left">
+              <span className={`tracker-dot ${trackerOnline ? 'online' : 'offline'}`} />
+              <span className="tracker-label">Tracker {trackerOnline ? 'Online' : 'Offline'}</span>
+            </div>
+            <button
+              className="feed-toggle-btn"
+              onClick={() => setShowFeed(v => !v)}
+              title={showFeed ? 'Hide camera feed' : 'Show camera feed'}
+            >
+              {showFeed ? 'Hide Feed' : 'Show Feed'}
+            </button>
           </div>
+
+          {/* Camera feed — only rendered when showFeed is true */}
+          {showFeed && (
+            <div className="webcam-container">
+              <WebcamFeed isActive={isSessionActive} />
+            </div>
+          )}
+
           {isSessionActive ? (
             <div className="session-button-row">
               <button

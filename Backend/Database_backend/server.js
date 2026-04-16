@@ -212,6 +212,35 @@ app.post("/session", async (req, res) => {
   }
 });
 
+//Pre-creates a UserSession row when the user clicks Start Session, returns the sessionId
+//so dmb.py can tag focus chunks against a real DB row from the start
+app.post("/session/start", (req, res) => {
+  const { userId, sessionStart } = req.body;
+  try {
+    const result = db.prepare(
+      "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration) VALUES (?, ?, ?, 0, '', '', 0)"
+    ).run(userId, sessionStart, sessionStart);
+    res.json({ success: true, sessionId: result.lastInsertRowid });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Session start error" });
+  }
+});
+
+//Inserts a 5-minute focus chunk sent by dmb.py (called every 5 active minutes and on session end)
+app.post("/session/chunk", (req, res) => {
+  const { sessionId, userId, chunkStatus } = req.body;
+  try {
+    db.prepare(
+      "INSERT INTO SessionChunk (SessionID, UserID, chunkStatus) VALUES (?, ?, ?)"
+    ).run(sessionId, userId, chunkStatus);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Chunk insert error" });
+  }
+});
+
 //Fetches daily session aggregates for a given user, year, and month (used for monthly heatmap)
 app.get("/sessions/metrics/monthly/:userId", (req, res) => {
   const { userId } = req.params;
@@ -282,14 +311,31 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
   }
 });
 
-//Updates session name and/or description
+//Updates session fields. When called after a session ends, also sets sessionEnd,
+//activeDuration, and calculates avgFocus from the session's focus chunks.
+//VF=3 (Very Focused), SF=2 (Slightly Focused), SU=1 (Slightly Unfocused), VU=0 (Very Unfocused)
 app.patch("/sessions/:sessionId", (req, res) => {
   const { sessionId } = req.params;
-  const { sessionName, sessionDescription } = req.body;
+  const { sessionName, sessionDescription, sessionEnd, activeDuration } = req.body;
   try {
-    db.prepare(
-      "UPDATE UserSession SET sessionName = ?, sessionDescription = ? WHERE SessionID = ?"
-    ).run(sessionName, sessionDescription ?? null, sessionId);
+    if (sessionEnd !== undefined) {
+      //Finalizing session: compute avgFocus from chunks then update all fields
+      const focusRow = db.prepare(`
+        SELECT AVG(CASE chunkStatus
+          WHEN 'VF' THEN 3 WHEN 'SF' THEN 2
+          WHEN 'SU' THEN 1 WHEN 'VU' THEN 0
+        END) as avg FROM SessionChunk WHERE SessionID = ?
+      `).get(sessionId);
+      const avgFocus = focusRow?.avg ?? 0;
+      db.prepare(
+        "UPDATE UserSession SET sessionName = ?, sessionDescription = ?, sessionEnd = ?, activeDuration = ?, avgFocus = ? WHERE SessionID = ?"
+      ).run(sessionName, sessionDescription ?? null, sessionEnd, activeDuration ?? 0, avgFocus, sessionId);
+    } else {
+      //Partial update: just name and description (e.g. from Sessions page edit)
+      db.prepare(
+        "UPDATE UserSession SET sessionName = ?, sessionDescription = ? WHERE SessionID = ?"
+      ).run(sessionName, sessionDescription ?? null, sessionId);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);
