@@ -1,0 +1,137 @@
+.studies-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 0 64px 0;
+}
+
+/* ── Header ───────────────────────────────────────────── */
+.studies-header {
+  padding: 48px 0 40px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 44px;
+}
+
+.studies-page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-bright);
+  margin: 0 0 12px 0;
+}
+
+.studies-page-sub {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Category sections ────────────────────────────────── */
+.studies-category {
+  margin-bottom: 44px;
+}
+
+.studies-category:last-child {
+  margin-bottom: 0;
+}
+
+.studies-category-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 14px 0;
+}
+
+.studies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Study card ───────────────────────────────────────── */
+.study-card {
+  display: block;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 0.18s, background-color 0.18s;
+}
+
+.study-card:hover {
+  border-color: var(--color-accent);
+  background-color: var(--color-bg-hover);
+}
+
+.study-card:hover .study-read-link {
+  color: var(--color-accent);
+}
+
+.study-card:hover .study-arrow {
+  transform: translateX(3px);
+}
+
+.study-card-inner {
+  padding: 20px 22px;
+}
+
+.study-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.study-category-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  background: transparent;
+}
+
+.study-year {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.study-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.45;
+  margin-bottom: 5px;
+}
+
+.study-authors {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+  font-style: italic;
+}
+
+.study-description {
+  font-size: 13px;
+  line-height: 1.72;
+  color: var(--color-text-secondary);
+  margin: 0 0 14px 0;
+}
+
+.study-read-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  transition: color 0.18s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.study-arrow {
+  display: inline-block;
+  transition: transform 0.18s;
+}

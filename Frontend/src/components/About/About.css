@@ -1,0 +1,224 @@
+.about-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 0 64px 0;
+}
+
+/* ── Hero ─────────────────────────────────────────────── */
+.about-hero {
+  padding: 48px 0 52px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 48px;
+}
+
+.about-hero-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 14px;
+}
+
+.about-hero-title {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: var(--color-text-bright);
+  margin: 0 0 18px 0;
+}
+
+.about-hero-sub {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  max-width: 600px;
+  margin: 0;
+}
+
+/* ── Sections ─────────────────────────────────────────── */
+.about-section {
+  margin-bottom: 52px;
+}
+
+.about-section--last {
+  margin-bottom: 0;
+}
+
+.about-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 20px 0;
+}
+
+/* ── Body text ────────────────────────────────────────── */
+.about-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.about-text-block p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Why-it-matters cards ─────────────────────────────── */
+.about-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.about-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.about-card-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 10px;
+}
+
+.about-card-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Steps ────────────────────────────────────────────── */
+.about-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.about-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.about-step:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.about-step-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-accent);
+  letter-spacing: 0.05em;
+  min-width: 28px;
+  padding-top: 2px;
+}
+
+.about-step-content {
+  flex: 1;
+}
+
+.about-step-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 5px;
+}
+
+.about-step-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Tips ─────────────────────────────────────────────── */
+.about-tips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.about-tip {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.about-tip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+}
+
+.about-tip-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Team ─────────────────────────────────────────────── */
+.about-team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.about-team-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 16px 10px 12px;
+}
+
+.about-team-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.about-team-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+/* ── Responsive ───────────────────────────────────────── */
+@media (max-width: 600px) {
+  .about-hero-title {
+    font-size: 26px;
+  }
+
+  .about-cards,
+  .about-tips {
+    grid-template-columns: 1fr;
+  }
+}
