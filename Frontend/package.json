@@ -12,6 +12,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1025.0",
     "@aws-sdk/s3-request-presigner": "^3.1025.0",
+    "chart.js": "^4.5.1",
     "framer-motion": "^12.38.0",
     "node": "^25.6.1",
     "oidc-client-ts": "^3.4.1",

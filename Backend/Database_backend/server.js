@@ -159,7 +159,7 @@ const stmtInsertSession = db.prepare(
   "INSERT INTO UserSession (UserID, sessionStart, sessionEnd, avgFocus, sessionName, sessionDescription, activeDuration) VALUES (?, ?, ?, ?, ?, ?, ?)"
 );
 const stmtGetRecentSessions = db.prepare(
-  "SELECT sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 3"
+  "SELECT sessionStart, sessionEnd, sessionName, sessionDescription, activeDuration FROM UserSession WHERE UserID = ? ORDER BY sessionStart DESC LIMIT 4"
 );
 
 //Looks up real cognito username via email filter before deleting,

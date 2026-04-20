@@ -67,7 +67,7 @@ const DRAWER_HEIGHT = 380;
 const HANDLE_HEIGHT = 48;
 
 const Home = () => {
-  const { user, sessionTrigger } = useAuth();
+  const { user, sessionTrigger, openSnapshot, clearOpenSnapshot } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [animKey, setAnimKey] = useState(0);
@@ -84,6 +84,12 @@ const Home = () => {
   const [preloaderActive, setPreloaderActive] = useState(fromLogin);
   const [bgVisible, setBgVisible] = useState(fromLogin);
   const [greetingReady, setGreetingReady] = useState(!fromLogin);
+
+  useEffect(() => {
+    if (!openSnapshot) return;
+    setDrawerOpen(true);
+    clearOpenSnapshot();
+  }, [openSnapshot, clearOpenSnapshot]);
 
   //Fetches most recent sessions when user is logged in
   useEffect(() => {
