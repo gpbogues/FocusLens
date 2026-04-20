@@ -7,6 +7,8 @@ import Home from './components/Home/Home'
 import Profile from './components/Profile/Profile'
 import Metrics from './components/Metrics/Metrics'
 import Sessions from './components/Sessions/Sessions'
+import About from './components/About/About'
+import Studies from './components/Studies/Studies'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SettingsProvider } from './context/SettingsContext'
 
@@ -61,6 +63,8 @@ function AppRoutes() {
         <Route path="profile" element={<Profile />} />
         <Route path="metrics" element={<Metrics />} />
         <Route path="sessions" element={<Sessions />} />
+        <Route path="about" element={<About />} />
+        <Route path="studies" element={<Studies />} />
       </Route>
     </Routes>
   )

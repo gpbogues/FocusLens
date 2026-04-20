@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
-export const THEMES = ['dark', 'light', 'ocean', 'forest', 'sunset', 'nord', 'rose'] as const;
+export const THEMES = ['dark', 'light', 'sunset', 'rose', 'stormy', 'hydrangea', 'pistachio', 'softspring'] as const;
 export type Theme = typeof THEMES[number];
 
 interface SettingsContextType {

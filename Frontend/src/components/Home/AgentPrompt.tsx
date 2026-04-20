@@ -8,21 +8,22 @@ import './AgentPrompt.css';
 const API_URL = import.meta.env.VITE_API_URL;
 
 const ACTION_MESSAGES: Record<string, string> = {
-  navigate_sessions: 'Navigating to your sessions!',
-  navigate_metrics:  'Pulling up your metrics!',
-  navigate_profile:  'Heading to your profile!',
-  start_session:     'Start Session is ready in the sidebar!',
-  unknown:           "Not sure about that one, try the quick actions below.",
+  navigate_sessions:         'Navigating to your sessions!',
+  navigate_sessions_folders: 'Taking you to your session folders!',
+  open_session_snapshot:     'Opening your recent session snapshot!',
+  navigate_metrics:          'Pulling up your metrics!',
+  navigate_profile:          'Heading to your profile!',
+  unknown:                   "Not sure about that one, try the quick actions below.",
 };
 
-const NAVIGATING_ACTIONS = new Set(['navigate_sessions', 'navigate_metrics', 'navigate_profile']);
+const NAVIGATING_ACTIONS = new Set(['navigate_sessions', 'navigate_sessions_folders', 'navigate_metrics', 'navigate_profile']);
 
 interface AgentPromptProps {
   greetingReady?: boolean;
 }
 
 const AgentPrompt = ({ greetingReady = true }: AgentPromptProps) => {
-  const { user, requestHighlightSession } = useAuth();
+  const { user, requestOpenSnapshot } = useAuth();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [responseText, setResponseText] = useState('');
@@ -31,7 +32,6 @@ const AgentPrompt = ({ greetingReady = true }: AgentPromptProps) => {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const chips = [
-    { label: 'Start a Session', icon: '▶', action: () => requestHighlightSession() },
     { label: 'View Sessions',  icon: '📋', action: () => navigate('/sessions') },
     { label: 'View Metrics',   icon: '📊', action: () => navigate('/metrics') },
     { label: 'Edit Profile',   icon: '👤', action: () => navigate('/profile') },
@@ -53,9 +53,10 @@ const AgentPrompt = ({ greetingReady = true }: AgentPromptProps) => {
   const executeAction = (action: string) => {
     setTimeout(() => {
       if (action === 'navigate_sessions') navigate('/sessions');
+      else if (action === 'navigate_sessions_folders') navigate('/sessions', { state: { tab: 'folders' } });
       else if (action === 'navigate_metrics') navigate('/metrics');
       else if (action === 'navigate_profile') navigate('/profile');
-      else if (action === 'start_session') requestHighlightSession();
+      else if (action === 'open_session_snapshot') requestOpenSnapshot();
     }, 600);
   };
 
