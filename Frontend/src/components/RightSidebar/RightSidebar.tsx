@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import WebcamFeed from '../WebcamFeed/WebcamFeed';
 import { useAuth } from '../../context/AuthContext';
 import './RightSidebar.css';
@@ -60,21 +60,8 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
   //Pre-created session ID — assigned on Start, used for chunks and finalization
   const sessionIdRef = useRef<number | null>(null);
 
-  //Tracker online/offline status (polls dmb.py every 5s)
-  const [trackerOnline, setTrackerOnline] = useState(false);
   //Show/hide camera feed — toggle is purely cosmetic, tracking always runs when session is active
   const [showFeed, setShowFeed] = useState(true);
-
-  //Poll dmb.py status endpoint to detect if the local tracker is running
-  useEffect(() => {
-    const check = () =>
-      fetch(`${DMB_URL}/api/status`, { signal: AbortSignal.timeout(2000) })
-        .then(() => setTrackerOnline(true))
-        .catch(() => setTrackerOnline(false));
-    check();
-    const id = setInterval(check, 5000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleToggleSession = async () => {
     if (!isSessionActive) {
@@ -228,25 +215,19 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
           </button>
         </div>
         <div className="sidebar-content">
-          {/* Tracker status indicator + feed visibility toggle */}
-          <div className="tracker-status">
-            <div className="tracker-status-left">
-              <span className={`tracker-dot ${trackerOnline ? 'online' : 'offline'}`} />
-              <span className="tracker-label">Tracker {trackerOnline ? 'Online' : 'Offline'}</span>
-            </div>
-            <button
-              className="feed-toggle-btn"
-              onClick={() => setShowFeed(v => !v)}
-              title={showFeed ? 'Hide camera feed' : 'Show camera feed'}
-            >
-              {showFeed ? 'Hide Feed' : 'Show Feed'}
-            </button>
-          </div>
+          {/* Feed visibility toggle */}
+          <button
+            className="feed-toggle-btn"
+            onClick={() => setShowFeed(v => !v)}
+            title={showFeed ? 'Hide camera feed' : 'Show camera feed'}
+          >
+            {showFeed ? 'Hide Feed' : 'Show Feed'}
+          </button>
 
           {/* Camera feed — only rendered when showFeed is true */}
           {showFeed && (
             <div className="webcam-container">
-              <WebcamFeed isActive={isSessionActive} />
+              <WebcamFeed isActive={isSessionActive} isPaused={isPaused} />
             </div>
           )}
 

@@ -19,7 +19,7 @@ interface SidebarProps {
 }
 
 const SIDEBAR_W = 260;
-const OPEN_DUR  = 0.9;
+const OPEN_DUR  = 0.75;
 const CLOSE_DUR = 0.75;
 const EASE: [number, number, number, number] = [0.76, 0, 0.24, 1];
 const NAV_EASE: [number, number, number, number] = [0.76, 0, 0.24, 1];
