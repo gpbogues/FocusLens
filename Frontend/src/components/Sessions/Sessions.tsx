@@ -29,6 +29,7 @@ interface Session {
   sessionDescription: string | null;
   avgFocus: number;
   activeDuration: number;
+  sessionFeedback: string | null;
 }
 
 interface Folder {
@@ -639,6 +640,21 @@ const Sessions = () => {
                 {session.sessionDescription || 'No Description'}
               </p>
             </div>
+            {session.sessionFeedback && (
+              <div className="session-detail-feedback">
+                <span className="session-detail-label">AI Feedback</span>
+                <div className="feedback-text-block">
+                  {session.sessionFeedback.split('\n').map((line, i) => {
+                    const isHeader = line.startsWith('**') && line.endsWith('**');
+                    return line.trim() ? (
+                      <p key={i} className={isHeader ? 'feedback-inline-header' : 'session-detail-desc-text'}>
+                        {isHeader ? line.replace(/\*\*/g, '') : line}
+                      </p>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

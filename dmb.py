@@ -1,5 +1,6 @@
 "Install requirements: pip install flask flask-cors opencv-python mediapipe joblib numpy requests "
 import os
+import sys
 import time
 import threading
 import joblib
@@ -28,6 +29,22 @@ _force_save_event  = threading.Event()  # triggers immediate flush of current ch
 _stop_engine_event = threading.Event()  # signals engine thread to stop and release camera
 _is_paused         = threading.Event()  # when set, engine skips frame processing (timer frozen)
 _engine_thread     = None               # reference to the running engine thread
+
+# Feedback state — populated after session ends, consumed by frontend during save flow
+_feedback_state     = {"status": "idle", "text": None}
+_feedback_lock      = threading.Lock()
+_feedback_cancelled = threading.Event()
+_session_last_stats: "dict | None" = None  # signal averages from the completed session
+
+
+def _compute_avg_focus(counts: dict) -> float:
+    """Maps chunk label counts to a 0–100 focus score."""
+    SCORES = {"VF": 100, "SF": 66, "SU": 33, "VU": 0}
+    total = sum(counts.values())
+    if total == 0:
+        return 0.0
+    return sum(SCORES[k] * v for k, v in counts.items()) / total
+
 
 # FaceLandmarker: initialized once in the main thread at startup to avoid
 # XNNPACK delegate failures that occur when TFLite is init'd in a daemon thread
@@ -114,16 +131,23 @@ def focus_engine():
         time.sleep(0.05)
     print(f"[ENGINE] Camera ready after {time.time() - _warmup_start:.1f}s", flush=True)
 
-    # Control variables
+    # Per-chunk control variables (reset every 5 minutes)
     five_min_buffer           = []
     active_session_time       = 0.0
     last_frame_time           = time.time()
-    SAVE_INTERVAL             = 300       
+    SAVE_INTERVAL             = 300
 
     distraction_frames_count  = 0
     total_frames_processed    = 0
     consecutive_absent_frames = 0
     ABSENCE_THRESHOLD         = 35
+
+    # Session-level accumulators (NOT reset per chunk — span the full session)
+    session_all_frames         = []   # every [ear, head_yaw, head_pitch, mar, eyebrow] row
+    session_distraction_frames = 0
+    session_total_frames       = 0
+    session_active_seconds     = 0.0
+    session_chunk_counts       = {"VF": 0, "SF": 0, "SU": 0, "VU": 0}
 
     # Distance helper
     def get_dist(p1, p2):
@@ -133,6 +157,10 @@ def focus_engine():
     def save_report():
         nonlocal five_min_buffer, distraction_frames_count
         nonlocal total_frames_processed, active_session_time
+        nonlocal session_all_frames, session_distraction_frames
+        nonlocal session_total_frames, session_active_seconds, session_chunk_counts
+
+        chunk_map = {3: "VF", 2: "SF", 1: "SU", 0: "VU"}
 
         if total_frames_processed > 5:
             distraction_ratio = distraction_frames_count / total_frames_processed
@@ -147,11 +175,17 @@ def focus_engine():
             if distraction_ratio > 0.40:
                 prediction = 1
 
+            # Feed session-level accumulators before resetting chunk buffers
+            session_all_frames.extend(five_min_buffer)
+            session_distraction_frames += distraction_frames_count
+            session_total_frames       += total_frames_processed
+            session_active_seconds     += active_session_time
+            session_chunk_counts[chunk_map.get(prediction, "SU")] += 1
+
             # POST chunk to Node.js backend
             save_chunk_via_api(label=prediction)
 
-
-        # Reset session buffers for next chunk window
+        # Reset per-chunk buffers for next window
         five_min_buffer           = []
         distraction_frames_count  = 0
         total_frames_processed    = 0
@@ -239,6 +273,26 @@ def focus_engine():
     if total_frames_processed > 50:
         save_report()
 
+    # Persist session-level stats in module state for feedback generation
+    global _session_last_stats
+    if session_total_frames > 50 and session_all_frames:
+        arr = np.array(session_all_frames)
+        _session_last_stats = {
+            "avg_ear":                float(np.mean(arr[:, 0])),
+            "avg_head_yaw":           float(np.mean(arr[:, 1])),
+            "avg_head_pitch":         float(np.mean(arr[:, 2])),
+            "avg_mar":                float(np.mean(arr[:, 3])),
+            "avg_eyebrow":            float(np.mean(arr[:, 4])),
+            "distraction_ratio":      session_distraction_frames / session_total_frames * 100,
+            "chunk_distribution":     dict(session_chunk_counts),
+            "avg_focus_score":        _compute_avg_focus(session_chunk_counts),
+            "active_duration_minutes": session_active_seconds / 60.0,
+        }
+        print(f"[ENGINE] Session stats stored for feedback: {_session_last_stats}", flush=True)
+    else:
+        _session_last_stats = None
+        print("[ENGINE] Not enough data for feedback", flush=True)
+
     # Clean up
     cap.release()
     _frame_bytes["data"] = None
@@ -254,7 +308,7 @@ def set_session():
     Resets all flags and spawns the engine thread, which opens the camera.
     Body: { userId, sessionId }
     """
-    global _engine_thread
+    global _engine_thread, _session_last_stats
     data = request.get_json()
     _session_ctx["userId"]    = data.get("userId")
     _session_ctx["sessionId"] = data.get("sessionId")
@@ -263,6 +317,13 @@ def set_session():
     _stop_engine_event.clear()
     _force_save_event.clear()
     _is_paused.clear()
+
+    # Clear previous session's feedback state so stale results aren't returned
+    _session_last_stats = None
+    _feedback_cancelled.clear()
+    with _feedback_lock:
+        _feedback_state["status"] = "idle"
+        _feedback_state["text"]   = None
 
     # Spawn engine thread — camera opens inside focus_engine()
     _engine_thread = threading.Thread(target=focus_engine, daemon=True)
@@ -301,6 +362,85 @@ def toggle_pause():
         print("[SESSION] Paused", flush=True)
     return jsonify({"paused": _is_paused.is_set()})
 
+
+@app.route("/api/session/feedback/generate", methods=["POST"])
+def generate_session_feedback():
+    """
+    Called by frontend when user clicks 'Yes' on the save confirm modal.
+    Spawns a background thread to run RAG + Groq feedback generation.
+    Frontend polls GET /api/session/feedback for status.
+    """
+    if _session_last_stats is None:
+        with _feedback_lock:
+            _feedback_state["status"] = "unavailable"
+            _feedback_state["text"]   = None
+        print("[FEEDBACK] No session stats — unavailable", flush=True)
+        return jsonify({"ok": True})
+
+    _feedback_cancelled.clear()
+    with _feedback_lock:
+        _feedback_state["status"] = "generating"
+        _feedback_state["text"]   = None
+
+    stats_snapshot = dict(_session_last_stats)
+
+    def _run(stats):
+        try:
+            # Lazy import — avoids loading SentenceTransformer at Flask startup
+            _rag_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag")
+            if _rag_path not in sys.path:
+                sys.path.insert(0, _rag_path)
+            from feedback_generator import generate_feedback
+
+            print("[FEEDBACK] Generating...", flush=True)
+            report = generate_feedback(**stats)
+
+            if _feedback_cancelled.is_set():
+                print("[FEEDBACK] Cancelled — discarding result", flush=True)
+                return
+
+            with _feedback_lock:
+                if report is None:
+                    _feedback_state["status"] = "unavailable"
+                    print("[FEEDBACK] No GROQ_API_KEY — unavailable", flush=True)
+                else:
+                    _feedback_state["status"] = "ready"
+                    _feedback_state["text"]   = report
+                    print("[FEEDBACK] Ready", flush=True)
+
+        except Exception as e:
+            print(f"[FEEDBACK] Error: {e}", flush=True)
+            if not _feedback_cancelled.is_set():
+                with _feedback_lock:
+                    _feedback_state["status"] = "error"
+                    _feedback_state["text"]   = None
+
+    threading.Thread(target=_run, args=(stats_snapshot,), daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/session/feedback/cancel", methods=["POST"])
+def cancel_session_feedback():
+    """
+    Called by frontend when user cancels from the name/description modal.
+    Sets the cancellation flag so the background thread discards its result.
+    """
+    _feedback_cancelled.set()
+    with _feedback_lock:
+        _feedback_state["status"] = "idle"
+        _feedback_state["text"]   = None
+    print("[FEEDBACK] Cancelled", flush=True)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/session/feedback", methods=["GET"])
+def get_session_feedback():
+    """
+    Polled by frontend after user clicks 'Yes' to save.
+    Returns: { status: 'idle'|'generating'|'ready'|'error'|'unavailable', text: str|null }
+    """
+    with _feedback_lock:
+        return jsonify(dict(_feedback_state))
 
 
 @app.route("/api/video_feed")

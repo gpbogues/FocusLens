@@ -39,11 +39,13 @@ const toDefaultSessionName = () => {
   );
 };
 
+type FeedbackStatus = 'idle' | 'generating' | 'ready' | 'error' | 'unavailable';
+
 const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSession, isCollapsed, onToggleCollapse }: RightSidebarProps) => {
   const { user, notifySessionSaved, highlightSession, clearHighlightSession } = useAuth();
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
-  const [saveModal, setSaveModal] = useState<'confirm' | 'details' | null>(null);
+  const [saveModal, setSaveModal] = useState<'confirm' | 'details' | 'feedback' | null>(null);
   const [sessionName, setSessionName] = useState('');
   const [sessionDescription, setSessionDescription] = useState('');
   //Holds the captured end time and default name while modal is open
@@ -52,6 +54,11 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
   const [isSaving, setIsSaving] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
+  //Feedback state
+  const [feedbackText, setFeedbackText] = useState<string | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>('idle');
+  const feedbackPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   //Date.now() accumulator for active time tracking
   const accumulatedMsRef = useRef<number>(0);
   const lastResumeAtRef = useRef<number>(0);
@@ -59,9 +66,44 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
   const pendingActiveDurationRef = useRef<number>(0);
   //Pre-created session ID — assigned on Start, used for chunks and finalization
   const sessionIdRef = useRef<number | null>(null);
+  // Capture name/description at Modal 2 confirm time for use in Modal 3 save
+  const pendingNameRef = useRef<string>('');
+  const pendingDescRef = useRef<string>('');
 
   //Show/hide camera feed — toggle is purely cosmetic, tracking always runs when session is active
   const [showFeed, setShowFeed] = useState(true);
+
+  const stopFeedbackPoll = () => {
+    if (feedbackPollRef.current) {
+      clearInterval(feedbackPollRef.current);
+      feedbackPollRef.current = null;
+    }
+  };
+
+  //Polls GET /api/session/feedback every 3s until ready, error, or unavailable (max 2 min)
+  const startFeedbackPolling = () => {
+    stopFeedbackPoll();
+    let polls = 0;
+    feedbackPollRef.current = setInterval(async () => {
+      polls++;
+      try {
+        const res  = await fetch(`${DMB_URL}/api/session/feedback`);
+        const data = await res.json();
+        if (data.status === 'ready') {
+          stopFeedbackPoll();
+          setFeedbackText(data.text);
+          setFeedbackStatus('ready');
+        } else if (data.status === 'error' || data.status === 'unavailable' || polls >= 40) {
+          stopFeedbackPoll();
+          setFeedbackStatus(data.status === 'unavailable' ? 'unavailable' : 'error');
+        }
+        // 'generating': keep polling
+      } catch {
+        stopFeedbackPoll();
+        setFeedbackStatus('unavailable');
+      }
+    }, 3000);
+  };
 
   const handleToggleSession = async () => {
     if (!isSessionActive) {
@@ -127,7 +169,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     onPauseSession();
   };
 
-  //Modal 1: user chose No = discard session
+  //Modal 1: user chose No = discard session (generation not yet started)
   const handleSaveNo = () => {
     setSaveModal(null);
     //Delete the pre-created session so it doesn't linger in the DB
@@ -138,7 +180,7 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     }
   };
 
-  //Modal 1: user chose Yes = open details form with defaults pre-filled
+  //Modal 1: user chose Yes = open details form
   const handleSaveYes = () => {
     const name = toDefaultSessionName();
     setDefaultName(name);
@@ -147,8 +189,11 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     setSaveModal('details');
   };
 
-  //Modal 2: user cancelled = discard session
+  //Modal 2: user cancelled = discard session (no generation to cancel yet)
   const handleDetailsCancel = () => {
+    stopFeedbackPoll();
+    setFeedbackText(null);
+    setFeedbackStatus('idle');
     setSaveModal(null);
     //Delete the pre-created session so it doesn't linger in the DB
     if (sessionIdRef.current) {
@@ -158,31 +203,38 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     }
   };
 
-  //Modal 2: user confirmed = PATCH session with final data
-  const handleDetailsConfirm = async () => {
+  //Modal 2: user confirmed = capture name/description, kick off generation, advance to feedback modal
+  const handleDetailsConfirm = () => {
+    if (isSaving) return;
+    pendingNameRef.current = sessionName.trim() || defaultName;
+    pendingDescRef.current = sessionDescription.trim() || 'No Description';
+    setFeedbackStatus('generating');
+    fetch(`${DMB_URL}/api/session/feedback/generate`, { method: 'POST' }).catch(() => {});
+    startFeedbackPolling();
+    setSaveModal('feedback');
+  };
+
+  //Modal 3: user clicked "Got it" = save session with feedback to DB
+  const handleFeedbackGotIt = async () => {
     if (isSaving) return;
     setIsSaving(true);
-
-    const name = sessionName.trim() || defaultName;
-    const description = sessionDescription.trim() || 'No Description';
+    stopFeedbackPoll();
 
     console.log('sessionId:', sessionIdRef.current);
-    console.log('userId:', user?.userId);
-    console.log('sessionStart:', sessionStart);
-    console.log('sessionEnd:', pendingEndTime);
-    console.log('sessionName:', name);
-    console.log('sessionDescription:', description);
+    console.log('sessionName:', pendingNameRef.current);
+    console.log('sessionDescription:', pendingDescRef.current);
+    console.log('feedbackStatus:', feedbackStatus);
 
     try {
       const res = await fetch(`${API_URL}/sessions/${sessionIdRef.current}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionEnd: pendingEndTime,
-          sessionName: name,
-          sessionDescription: description,
-          activeDuration: pendingActiveDurationRef.current,
-          avgFocus: 75,
+          sessionEnd:         pendingEndTime,
+          sessionName:        pendingNameRef.current,
+          sessionDescription: pendingDescRef.current,
+          activeDuration:     pendingActiveDurationRef.current,
+          sessionFeedback:    feedbackText ?? null,
         }),
       });
       const data = await res.json();
@@ -200,6 +252,8 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     sessionIdRef.current = null;
     setIsSaving(false);
     setSaveModal(null);
+    setFeedbackText(null);
+    setFeedbackStatus('idle');
   };
 
   return (
@@ -301,6 +355,57 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
               <button className="modal-cancel" onClick={handleDetailsCancel}>Cancel</button>
               <button className="modal-save" onClick={handleDetailsConfirm} disabled={isSaving}>
                 {isSaving ? 'Saving…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: AI Focus Feedback */}
+      {saveModal === 'feedback' && (
+        <div className="modal-overlay">
+          <div className="modal-box modal-box-feedback">
+            <h3 className="modal-title">AI Focus Feedback</h3>
+
+            {feedbackStatus === 'generating' && (
+              <div className="feedback-loading-row">
+                <span className="feedback-spinner" />
+                <p className="modal-subtitle">Analyzing your session with research-backed insights</p>
+              </div>
+            )}
+
+            {feedbackStatus === 'ready' && feedbackText && (
+              <div className="feedback-content">
+                {feedbackText.split('\n').map((line, i) => {
+                  const isHeader = line.startsWith('**') && line.endsWith('**');
+                  return line.trim() ? (
+                    <p key={i} className={isHeader ? 'feedback-section-header' : 'feedback-body'}>
+                      {isHeader ? line.replace(/\*\*/g, '') : line}
+                    </p>
+                  ) : null;
+                })}
+              </div>
+            )}
+
+            {(feedbackStatus === 'error' || feedbackStatus === 'unavailable') && (
+              <p className="modal-subtitle feedback-unavailable">
+                {feedbackStatus === 'unavailable'
+                  ? 'AI feedback is not configured (no GROQ_API_KEY). Your session will still be saved.'
+                  : 'Could not generate feedback right now. Your session will still be saved.'}
+              </p>
+            )}
+
+            <div className="modal-actions">
+              <button
+                className="modal-save"
+                onClick={handleFeedbackGotIt}
+                disabled={isSaving || feedbackStatus === 'generating'}
+              >
+                {feedbackStatus === 'generating'
+                  ? 'Please wait'
+                  : isSaving
+                  ? 'Saving'
+                  : 'Got it'}
               </button>
             </div>
           </div>
