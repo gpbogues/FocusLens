@@ -64,7 +64,7 @@ db.pragma("cache_size = -8000");   //8 MB page cache (default ~2 MB)
 db.pragma("synchronous = NORMAL"); //safe with WAL, skips unnecessary fsyncs
 db.pragma("temp_store = MEMORY");  //keep temp tables (window functions) in memory
 
-//Initialize schema, CREATE TABLE IF NOT EXISTS is idempotent, safe to run every startup
+//Initialize schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS UserData (
     UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,6 +89,7 @@ db.exec(`
     avgFocus           REAL NOT NULL,
     sessionName        TEXT NOT NULL DEFAULT '',
     sessionDescription TEXT NULL,
+    sessionFeedback    TEXT NULL,
     FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
   );
 
@@ -296,7 +297,7 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
     //full matching row count, eliminating the need for a separate COUNT query
     //tldr, one query instead of two for sesssions page
     const rows = db.prepare(
-      `SELECT SessionID, sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus, activeDuration,
+      `SELECT SessionID, sessionStart, sessionEnd, sessionName, sessionDescription, avgFocus, activeDuration, sessionFeedback,
               COUNT(*) OVER() AS total
        FROM UserSession
        WHERE UserID = ? AND LOWER(sessionName) LIKE ?
@@ -312,11 +313,11 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
 });
 
 //Updates session fields. When called after a session ends, also sets sessionEnd,
-//activeDuration, and calculates avgFocus from the session's focus chunks.
+//activeDuration, calculates avgFocus from chunks, and stores AI feedback if provided.
 //VF=3 (Very Focused), SF=2 (Slightly Focused), SU=1 (Slightly Unfocused), VU=0 (Very Unfocused)
 app.patch("/sessions/:sessionId", (req, res) => {
   const { sessionId } = req.params;
-  const { sessionName, sessionDescription, sessionEnd, activeDuration } = req.body;
+  const { sessionName, sessionDescription, sessionEnd, activeDuration, sessionFeedback } = req.body;
   try {
     if (sessionEnd !== undefined) {
       //Finalizing session: compute avgFocus from chunks then update all fields
@@ -328,8 +329,8 @@ app.patch("/sessions/:sessionId", (req, res) => {
       `).get(sessionId);
       const avgFocus = focusRow?.avg ?? 0;
       db.prepare(
-        "UPDATE UserSession SET sessionName = ?, sessionDescription = ?, sessionEnd = ?, activeDuration = ?, avgFocus = ? WHERE SessionID = ?"
-      ).run(sessionName, sessionDescription ?? null, sessionEnd, activeDuration ?? 0, avgFocus, sessionId);
+        "UPDATE UserSession SET sessionName = ?, sessionDescription = ?, sessionEnd = ?, activeDuration = ?, avgFocus = ?, sessionFeedback = ? WHERE SessionID = ?"
+      ).run(sessionName, sessionDescription ?? null, sessionEnd, activeDuration ?? 0, avgFocus, sessionFeedback ?? null, sessionId);
     } else {
       //Partial update: just name and description (e.g. from Sessions page edit)
       db.prepare(
