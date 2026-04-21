@@ -66,10 +66,6 @@ db.pragma("temp_store = MEMORY");  //keep temp tables (window functions) in memo
 
 //Initialize schema
 db.exec(`
-  DROP TABLE IF EXISTS SessionChunk;
-  DROP TABLE IF EXISTS SessionFolderMap;
-  DROP TABLE IF EXISTS UserSession;
-
   CREATE TABLE IF NOT EXISTS UserData (
     UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
     uEmail        TEXT NOT NULL UNIQUE,
