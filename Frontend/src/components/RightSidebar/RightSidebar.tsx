@@ -12,6 +12,9 @@ interface RightSidebarProps {
   onToggleCollapse: () => void;
 }
 
+// dmb.py Flask server — always runs locally on the user's machine
+const DMB_URL = 'http://localhost:5000';
+
 //Format stored time to fit with sql timedate format
 //Updated to return user current time based off of local timezone,
 //before was simpler but used UTC time for everyone, which created offsets
@@ -36,11 +39,13 @@ const toDefaultSessionName = () => {
   );
 };
 
+type FeedbackStatus = 'idle' | 'generating' | 'ready' | 'error' | 'unavailable';
+
 const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSession, isCollapsed, onToggleCollapse }: RightSidebarProps) => {
   const { user, notifySessionSaved, highlightSession, clearHighlightSession } = useAuth();
   const [sessionStart, setSessionStart] = useState<string>('');
   const [sessionEnd, setSessionEnd] = useState<string>('');
-  const [saveModal, setSaveModal] = useState<'confirm' | 'details' | null>(null);
+  const [saveModal, setSaveModal] = useState<'confirm' | 'details' | 'feedback' | null>(null);
   const [sessionName, setSessionName] = useState('');
   const [sessionDescription, setSessionDescription] = useState('');
   //Holds the captured end time and default name while modal is open
@@ -49,11 +54,56 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
   const [isSaving, setIsSaving] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
-  //Date.now() accumulator for active time tracking 
+  //Feedback state
+  const [feedbackText, setFeedbackText] = useState<string | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>('idle');
+  const feedbackPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  //Date.now() accumulator for active time tracking
   const accumulatedMsRef = useRef<number>(0);
   const lastResumeAtRef = useRef<number>(0);
   //Ref to capture activeDuration at stop time, used in the save modal
   const pendingActiveDurationRef = useRef<number>(0);
+  //Pre-created session ID — assigned on Start, used for chunks and finalization
+  const sessionIdRef = useRef<number | null>(null);
+  // Capture name/description at Modal 2 confirm time for use in Modal 3 save
+  const pendingNameRef = useRef<string>('');
+  const pendingDescRef = useRef<string>('');
+
+  //Show/hide camera feed — toggle is purely cosmetic, tracking always runs when session is active
+  const [showFeed, setShowFeed] = useState(true);
+
+  const stopFeedbackPoll = () => {
+    if (feedbackPollRef.current) {
+      clearInterval(feedbackPollRef.current);
+      feedbackPollRef.current = null;
+    }
+  };
+
+  //Polls GET /api/session/feedback every 3s until ready, error, or unavailable (max 2 min)
+  const startFeedbackPolling = () => {
+    stopFeedbackPoll();
+    let polls = 0;
+    feedbackPollRef.current = setInterval(async () => {
+      polls++;
+      try {
+        const res  = await fetch(`${DMB_URL}/api/session/feedback`);
+        const data = await res.json();
+        if (data.status === 'ready') {
+          stopFeedbackPoll();
+          setFeedbackText(data.text);
+          setFeedbackStatus('ready');
+        } else if (data.status === 'error' || data.status === 'unavailable' || polls >= 40) {
+          stopFeedbackPoll();
+          setFeedbackStatus(data.status === 'unavailable' ? 'unavailable' : 'error');
+        }
+        // 'generating': keep polling
+      } catch {
+        stopFeedbackPoll();
+        setFeedbackStatus('unavailable');
+      }
+    }, 3000);
+  };
 
   const handleToggleSession = async () => {
     if (!isSessionActive) {
@@ -63,6 +113,28 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       const startTime = toMySQLDateTime();
       setSessionStart(startTime);
       setSessionEnd('');
+
+      //Pre-create the session in DB so dmb.py has a real sessionId for chunk tagging
+      try {
+        const startRes = await fetch(`${API_URL}/session/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user?.userId, sessionStart: startTime }),
+        });
+        const startData = await startRes.json();
+        sessionIdRef.current = startData.sessionId ?? null;
+      } catch (err) {
+        console.error('Failed to pre-create session:', err);
+        sessionIdRef.current = null;
+      }
+
+      //Tell dmb.py to open camera and begin tracking (best-effort — works even if offline)
+      fetch(`${DMB_URL}/api/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, sessionId: sessionIdRef.current }),
+      }).catch(() => console.warn('[dmb.py] unreachable on start'));
+
       onToggleSession();
     } else {
       //Stopping session: finalize active duration, capture end time, show save prompt
@@ -73,6 +145,11 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       const endTime = toMySQLDateTime();
       setSessionEnd(endTime);
       setPendingEndTime(endTime);
+
+      //Signal dmb.py to flush the final chunk and release the camera
+      fetch(`${DMB_URL}/api/session/end`, { method: 'POST' })
+        .catch(() => console.warn('[dmb.py] unreachable on end'));
+
       onToggleSession();
       setSaveModal('confirm');
     }
@@ -86,16 +163,24 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       //Resuming: reset the resume anchor
       lastResumeAtRef.current = Date.now();
     }
+    //Toggle dmb.py pause/resume (best-effort)
+    fetch(`${DMB_URL}/api/session/pause`, { method: 'POST' })
+      .catch(() => console.warn('[dmb.py] unreachable on pause'));
     onPauseSession();
   };
 
-  //Modal 1: user chose No = discard session
+  //Modal 1: user chose No = discard session (generation not yet started)
   const handleSaveNo = () => {
     setSaveModal(null);
-    console.log('RightSidebar: user chose not to save session, session discarded');
+    //Delete the pre-created session so it doesn't linger in the DB
+    if (sessionIdRef.current) {
+      fetch(`${API_URL}/sessions/${sessionIdRef.current}`, { method: 'DELETE' })
+        .catch(() => {});
+      sessionIdRef.current = null;
+    }
   };
 
-  //Modal 1: user chose Yes = open details form with defaults pre-filled
+  //Modal 1: user chose Yes = open details form
   const handleSaveYes = () => {
     const name = toDefaultSessionName();
     setDefaultName(name);
@@ -104,38 +189,52 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
     setSaveModal('details');
   };
 
-  //Modal 2: user cancelled = discard session
+  //Modal 2: user cancelled = discard session (no generation to cancel yet)
   const handleDetailsCancel = () => {
+    stopFeedbackPoll();
+    setFeedbackText(null);
+    setFeedbackStatus('idle');
     setSaveModal(null);
-    console.log('RightSidebar: user cancelled save, session discarded');
+    //Delete the pre-created session so it doesn't linger in the DB
+    if (sessionIdRef.current) {
+      fetch(`${API_URL}/sessions/${sessionIdRef.current}`, { method: 'DELETE' })
+        .catch(() => {});
+      sessionIdRef.current = null;
+    }
   };
 
-  //Modal 2: user confirmed = POST session to backend
-  const handleDetailsConfirm = async () => {
+  //Modal 2: user confirmed = capture name/description, kick off generation, advance to feedback modal
+  const handleDetailsConfirm = () => {
+    if (isSaving) return;
+    pendingNameRef.current = sessionName.trim() || defaultName;
+    pendingDescRef.current = sessionDescription.trim() || 'No Description';
+    setFeedbackStatus('generating');
+    fetch(`${DMB_URL}/api/session/feedback/generate`, { method: 'POST' }).catch(() => {});
+    startFeedbackPolling();
+    setSaveModal('feedback');
+  };
+
+  //Modal 3: user clicked "Got it" = save session with feedback to DB
+  const handleFeedbackGotIt = async () => {
     if (isSaving) return;
     setIsSaving(true);
+    stopFeedbackPoll();
 
-    const name = sessionName.trim() || defaultName;
-    const description = sessionDescription.trim() || 'No Description';
-
-    console.log('userId:', user?.userId);
-    console.log('sessionStart:', sessionStart);
-    console.log('sessionEnd:', pendingEndTime);
-    console.log('sessionName:', name);
-    console.log('sessionDescription:', description);
+    console.log('sessionId:', sessionIdRef.current);
+    console.log('sessionName:', pendingNameRef.current);
+    console.log('sessionDescription:', pendingDescRef.current);
+    console.log('feedbackStatus:', feedbackStatus);
 
     try {
-      const res = await fetch(`${API_URL}/session`, {
-        method: 'POST',
+      const res = await fetch(`${API_URL}/sessions/${sessionIdRef.current}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user?.userId,
-          sessionStart,
-          sessionEnd: pendingEndTime,
-          sessionName: name,
-          sessionDescription: description,
-          activeDuration: pendingActiveDurationRef.current,
-          avgFocus: 75,
+          sessionEnd:         pendingEndTime,
+          sessionName:        pendingNameRef.current,
+          sessionDescription: pendingDescRef.current,
+          activeDuration:     pendingActiveDurationRef.current,
+          sessionFeedback:    feedbackText ?? null,
         }),
       });
       const data = await res.json();
@@ -150,8 +249,11 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
       console.error('Failed to save session:', err);
     }
 
+    sessionIdRef.current = null;
     setIsSaving(false);
     setSaveModal(null);
+    setFeedbackText(null);
+    setFeedbackStatus('idle');
   };
 
   return (
@@ -167,9 +269,22 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
           </button>
         </div>
         <div className="sidebar-content">
-          <div className="webcam-container">
-            <WebcamFeed isActive={isSessionActive} />
-          </div>
+          {/* Feed visibility toggle */}
+          <button
+            className="feed-toggle-btn"
+            onClick={() => setShowFeed(v => !v)}
+            title={showFeed ? 'Hide camera feed' : 'Show camera feed'}
+          >
+            {showFeed ? 'Hide Feed' : 'Show Feed'}
+          </button>
+
+          {/* Camera feed — only rendered when showFeed is true */}
+          {showFeed && (
+            <div className="webcam-container">
+              <WebcamFeed isActive={isSessionActive} isPaused={isPaused} />
+            </div>
+          )}
+
           {isSessionActive ? (
             <div className="session-button-row">
               <button
@@ -240,6 +355,57 @@ const RightSidebar = ({ isSessionActive, onToggleSession, isPaused, onPauseSessi
               <button className="modal-cancel" onClick={handleDetailsCancel}>Cancel</button>
               <button className="modal-save" onClick={handleDetailsConfirm} disabled={isSaving}>
                 {isSaving ? 'Saving…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: AI Focus Feedback */}
+      {saveModal === 'feedback' && (
+        <div className="modal-overlay">
+          <div className="modal-box modal-box-feedback">
+            <h3 className="modal-title">AI Focus Feedback</h3>
+
+            {feedbackStatus === 'generating' && (
+              <div className="feedback-loading-row">
+                <span className="feedback-spinner" />
+                <p className="modal-subtitle">Analyzing your session with research-backed insights</p>
+              </div>
+            )}
+
+            {feedbackStatus === 'ready' && feedbackText && (
+              <div className="feedback-content">
+                {feedbackText.split('\n').map((line, i) => {
+                  const isHeader = line.startsWith('**') && line.endsWith('**');
+                  return line.trim() ? (
+                    <p key={i} className={isHeader ? 'feedback-section-header' : 'feedback-body'}>
+                      {isHeader ? line.replace(/\*\*/g, '') : line}
+                    </p>
+                  ) : null;
+                })}
+              </div>
+            )}
+
+            {(feedbackStatus === 'error' || feedbackStatus === 'unavailable') && (
+              <p className="modal-subtitle feedback-unavailable">
+                {feedbackStatus === 'unavailable'
+                  ? 'AI feedback is not configured (no GROQ_API_KEY). Your session will still be saved.'
+                  : 'Could not generate feedback right now. Your session will still be saved.'}
+              </p>
+            )}
+
+            <div className="modal-actions">
+              <button
+                className="modal-save"
+                onClick={handleFeedbackGotIt}
+                disabled={isSaving || feedbackStatus === 'generating'}
+              >
+                {feedbackStatus === 'generating'
+                  ? 'Please wait'
+                  : isSaving
+                  ? 'Saving'
+                  : 'Got it'}
               </button>
             </div>
           </div>
