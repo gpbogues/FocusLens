@@ -118,7 +118,9 @@ def focus_engine():
     face_mesh = _face_landmarker  # initialized in main thread at startup
 
     # Open camera — only happens during an active session
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    # CAP_DSHOW is Windows-only; use default backend on macOS/Linux
+    _cam_backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+    cap = cv2.VideoCapture(0, _cam_backend)
     if not cap.isOpened():
         print("[ENGINE] Failed to open camera")
         return
