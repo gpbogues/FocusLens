@@ -1,4 +1,4 @@
-"Install requirements: pip install flask flask-cors opencv-python mediapipe joblib numpy requests boto3 awscli"
+"Install requirements: pip install flask flask-cors opencv-python mediapipe joblib numpy requests boto3 awscli chromadb sentence-transformers"
 import os
 import sys
 import time
