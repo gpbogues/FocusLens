@@ -13,7 +13,7 @@ interface RightSidebarProps {
 }
 
 // dmb.py Flask server — always runs locally on the user's machine
-const DMB_URL = 'http://localhost:5000';
+const DMB_URL = import.meta.env.VITE_DMB_URL ?? 'http://localhost:5000';
 
 //Format stored time to fit with sql timedate format
 //Updated to return user current time based off of local timezone,

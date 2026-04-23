@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './WebcamFeed.css';
 
-const DMB_URL = 'http://localhost:5000';
+const DMB_URL = import.meta.env.VITE_DMB_URL ?? 'http://localhost:5000';
 
 interface WebcamFeedProps {
   isActive: boolean;
