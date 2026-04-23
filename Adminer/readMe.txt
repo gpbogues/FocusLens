@@ -33,12 +33,18 @@ ONE-TIME SETUP:
 
 EVERY TIME YOU WANT TO VIEW THE DB:
 
-    Step 1 — Make sure Adminer is running on EC2 (SSH in and check):
-        ssh -i ~/.ssh/LensPair.pem ubuntu@ec2-100-27-212-225.compute-1.amazonaws.com
-        cd ~/Adminer
-        docker compose -f docker-compose.ec2.yml up -d
+    Adminer is always running on EC2, so no need to start it.
+    You just need to open an SSH tunnel from your local machine to forward
+    EC2's port 8080 to your localhost.
 
-    Step 2 — Open SSH tunnel from a NEW local Git Bash terminal (keep it open, no output is normal):
+    REQUIREMENT: You need the LensPair.pem key file — do NOT commit it to the repo.
+
+    Step 1 — Place LensPair.pem in your ~/.ssh/ folder (one-time, if you haven't already):
+        mkdir -p ~/.ssh
+        mv /path/to/LensPair.pem ~/.ssh/LensPair.pem (basically move the .pem file into .ssh folder)
+        chmod 400 ~/.ssh/LensPair.pem
+
+    Step 2 — Open SSH tunnel from a local terminal (keep it open, no output is normal):
         ssh -i ~/.ssh/LensPair.pem -L 8080:localhost:8080 ubuntu@ec2-100-27-212-225.compute-1.amazonaws.com -N
 
     Step 3 — Open browser and go to:
