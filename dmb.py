@@ -466,4 +466,6 @@ def api_video_feed():
 if __name__ == "__main__":
     print(f"[CONFIG] Backend URL: {NODE_API_URL}")
     print("[CONFIG] Engine idle - camera will open when a session starts.", flush=True)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    dmb_port = int(os.environ.get("DMB_PORT", 5000))
+    print(f"[CONFIG] DMB Flask server starting on port {dmb_port}", flush=True)
+    app.run(host="0.0.0.0", port=dmb_port, debug=False)
