@@ -290,7 +290,7 @@
 /* Two-column time rows in list view */
 .session-details-time-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
   padding-top: 12px;
 }

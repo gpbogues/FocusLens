@@ -1,7 +1,4 @@
-import os, logging, requests
-import chromadb
-from chromadb.config import Settings
-from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+import os, logging, random, requests
 
 logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
 
@@ -49,6 +46,9 @@ def _get_collection():
     global _chroma_client, _collection
     if _collection is None:
         _ensure_db()
+        import chromadb
+        from chromadb.config import Settings
+        from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
         ef = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
         _chroma_client = chromadb.PersistentClient(
             path=DB_PATH, settings=Settings(anonymized_telemetry=False)
@@ -129,8 +129,7 @@ def generate_feedback(
         f"- Primary distraction signal: {primary_cause}"
     )
 
-    # Build retrieval terms from signal values — maps raw numbers to research terminology
-    # so that ChromaDB embedding similarity to paper text is much stronger
+    # Build a single broad retrieval query from all active signals
     retrieval_terms = ["attention", "focus", "cognitive performance"]
 
     if avg_ear < 0.012:
@@ -163,19 +162,22 @@ def generate_feedback(
 
     retrieval_query = " ".join(retrieval_terms)
 
-    # Query ChromaDB: fetch top-18, deduplicate to 1 chunk per paper (max 6 papers)
+    # Fetch top-30, deduplicate to 1 chunk per paper, then randomly sample 6 —
+    # same signal profile gets different papers each session
     col = _get_collection()
-    results = col.query(query_texts=[retrieval_query], n_results=18)
+    results = col.query(query_texts=[retrieval_query], n_results=30)
     seen_sources = set()
-    chunks, sources = [], []
+    pool_chunks, pool_sources = [], []
     for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
         src = meta["source"]
         if src not in seen_sources:
-            chunks.append(doc)
-            sources.append(src)
+            pool_chunks.append(doc)
+            pool_sources.append(src)
             seen_sources.add(src)
-        if len(chunks) == 6:
-            break
+
+    indices = random.sample(range(len(pool_sources)), min(6, len(pool_sources)))
+    chunks  = [pool_chunks[i]  for i in indices]
+    sources = [pool_sources[i] for i in indices]
 
     research_context = "\n\n".join(
         f"[From: {os.path.splitext(src)[0][:70]}]\n{chunk}"
@@ -188,12 +190,11 @@ def generate_feedback(
         "eyebrow distance. Focus quality per 5-minute chunk is labelled VF (Very Focused), SF (Somewhat "
         "Focused), SU (Somewhat Unfocused), or VU (Very Unfocused). Write a post-session report using ONLY "
         "data from this session and the provided research context. Never give generic advice.\n\n"
-        "Output exactly three labeled sections:\n"
-        "**Summary:** One sentence referencing at least one specific biometric number from this session.\n"
-        "**Recommendation:** One actionable tip tied directly to the primary distraction signal, "
-        "grounded in the research context provided.\n"
-        "**Highlight:** One genuine positive observation drawn from the actual session metrics.\n\n"
-        "Each section: 1–2 sentences. Do not add extra sections or preamble."
+        "Output exactly three sections using this format with no extra symbols or markdown:\n"
+        "Summary:\n<one sentence referencing at least one specific biometric number from this session>\n\n"
+        "Recommendation:\n<one actionable tip tied directly to the primary distraction signal, grounded in the research context>\n\n"
+        "Highlight:\n<one genuine positive observation drawn from the actual session metrics>\n\n"
+        "Each section: 1–2 sentences. Do not add extra sections, preamble, or any markdown symbols."
     )
     user_msg = (
         f"{raw_query}\n\n"
@@ -222,4 +223,15 @@ def generate_feedback(
         timeout=60,
     )
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    report = resp.json()["choices"][0]["message"]["content"].strip()
+
+    if sources:
+        def _fmt(name, limit=60):
+            return name if len(name) <= limit else name[:limit - 3] + "..."
+        citations = "\n".join(
+            f"{i + 1}. {_fmt(os.path.splitext(src)[0])}"
+            for i, src in enumerate(sources)
+        )
+        report = f"{report}\n\nSources:\n{citations}"
+
+    return report

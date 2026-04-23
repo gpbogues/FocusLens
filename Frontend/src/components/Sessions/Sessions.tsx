@@ -39,7 +39,7 @@ interface Folder {
   sessionCount: number;
 }
 
-type SortBy = 'date' | 'duration' | 'avgFocus';
+type SortBy = 'date' | 'duration';
 type SortDir = 'ASC' | 'DESC';
 type Layout = 'list' | 'grid';
 type Tab = 'sessions' | 'folders';
@@ -556,7 +556,6 @@ const Sessions = () => {
   const sortLabels: Record<SortBy, string> = {
     date: 'Date',
     duration: 'Duration',
-    avgFocus: 'Avg Focus',
   };
 
   const renderDotsMenu = (session: Session, idx: number, inFolderView = false) => (
@@ -623,15 +622,9 @@ const Sessions = () => {
                 <span className="session-detail-label">End Time</span>
                 <span className="session-detail-value">{end.time}</span>
               </div>
-            </div>
-            <div className="session-details-time-row">
               <div className="session-detail-col">
                 <span className="session-detail-label">Duration</span>
                 <span className="session-detail-value session-detail-duration">{dur}</span>
-              </div>
-              <div className="session-detail-col">
-                <span className="session-detail-label">Avg Focus</span>
-                <span className="session-detail-value">{session.avgFocus}%</span>
               </div>
             </div>
             <div className="session-detail-description">
@@ -645,10 +638,10 @@ const Sessions = () => {
                 <span className="session-detail-label">AI Feedback</span>
                 <div className="feedback-text-block">
                   {session.sessionFeedback.split('\n').map((line, i) => {
-                    const isHeader = line.startsWith('**') && line.endsWith('**');
+                    const isHeader = line.trimEnd().endsWith(':') && line.trim().split(' ').length <= 3;
                     return line.trim() ? (
                       <p key={i} className={isHeader ? 'feedback-inline-header' : 'session-detail-desc-text'}>
-                        {isHeader ? line.replace(/\*\*/g, '') : line}
+                        {line}
                       </p>
                     ) : null;
                   })}
@@ -663,6 +656,7 @@ const Sessions = () => {
 
   const renderGridCard = (session: Session, i: number, inFolderView = false) => {
     const start = formatDateTime(session.sessionStart);
+    const end = formatDateTime(session.sessionEnd);
     const dur = calcTotalDuration(session.sessionStart, session.sessionEnd, session.activeDuration);
     const displayName = session.sessionName || start.date;
 
@@ -675,16 +669,16 @@ const Sessions = () => {
         </div>
         <div className="session-grid-stats">
           <div className="session-stat-box">
-            <span className="session-detail-label">Duration</span>
-            <span className="session-stat-value session-stat-duration">{dur}</span>
-          </div>
-          <div className="session-stat-box">
-            <span className="session-detail-label">Avg Focus</span>
-            <span className="session-stat-value">{session.avgFocus}%</span>
-          </div>
-          <div className="session-stat-box">
             <span className="session-detail-label">Start</span>
             <span className="session-stat-value">{start.time}</span>
+          </div>
+          <div className="session-stat-box">
+            <span className="session-detail-label">End</span>
+            <span className="session-stat-value">{end.time}</span>
+          </div>
+          <div className="session-stat-box">
+            <span className="session-detail-label">Duration</span>
+            <span className="session-stat-value session-stat-duration">{dur}</span>
           </div>
         </div>
         {session.sessionDescription && (
@@ -714,7 +708,7 @@ const Sessions = () => {
 
       <div className="sessions-controls-row">
         <div className="sessions-sort-group">
-          {(['date', 'duration', 'avgFocus'] as SortBy[]).map(field => (
+          {(['date', 'duration'] as SortBy[]).map(field => (
             <button
               key={field}
               className={`sessions-sort-btn${sortBy === field ? ' active' : ''}`}
