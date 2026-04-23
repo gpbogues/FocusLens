@@ -287,7 +287,6 @@ app.get("/sessions/paginated/:userId", async (req, res) => {
   const sortByMap = {
     date:     'sessionStart',
     duration: 'activeDuration',
-    avgFocus: 'avgFocus',
   };
   const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
 
@@ -495,7 +494,6 @@ app.get("/folders/:folderId/sessions", (req, res) => {
   const sortByMap = {
     date:     'sessionStart',
     duration: 'activeDuration',
-    avgFocus: 'avgFocus',
   };
   const orderExpr = sortByMap[req.query.sortBy] || sortByMap.date;
 
