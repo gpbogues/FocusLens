@@ -17,6 +17,23 @@ To add:
 
 */
 
+interface FocusDataPoint {
+  date: string;
+  focusScore: number;
+  sessionCount: number;
+}
+
+interface FocusResponse {
+  success: boolean;
+  data: FocusDataPoint[];
+}
+
+interface WeeklyResponse {
+  success: boolean;
+  data: DayMetric[];
+}
+
+
 Chart.register(...registerables);
 
 type Range = '7D' | '1M' | '1Y';
@@ -235,9 +252,10 @@ const Metrics = () => {
           `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
           { credentials: 'include' }
         );
-        const json = await res.json();
+        const json: FocusResponse = await res.json();
         if (json.success && json.data.length > 0) {
           setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
+          setEyeData(json.data.map((d: any) => Math.round(d.eyeContact || 0)));
           setSessionCount(json.data.reduce((sum: number, d: any) => sum + (d.sessionCount || 0), 0));
         }
       } catch (err) {
@@ -258,7 +276,7 @@ const Metrics = () => {
           `${API_URL}/metrics/weekly-summary/${user.userId}`,
           { credentials: 'include' }
         );
-        const json = await res.json();
+        const json: WeeklyResponse = await res.json();
         if (json.success && json.data) setWeekData(json.data);
       } catch (err) {
         console.error('Failed to fetch weekly data:', err);
@@ -378,8 +396,8 @@ const Metrics = () => {
               },
               {
                 label: 'Avg eye contact',
-                value: '-',
-                unit:  '',
+                value: eyeData.length ? `${avg(eyeData)}` : '-',
+                unit:  eyeData.length ? '%' : '',
               },
               {
                 label: 'Sessions',
