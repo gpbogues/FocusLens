@@ -939,6 +939,73 @@ app.post("/agent", async (req, res) => {
   }
 });
 
+// Focus over time - for the line chart
+app.get("/metrics/focus-over-time/:userId", (req, res) => {
+  const { userId } = req.params;
+  const range = req.query.range || '7D';
+
+  const dateFilter = range === '7D' ? '-7 days'
+                   : range === '1M' ? '-30 days'
+                   : '-365 days';
+
+  try {
+    const rows = db.prepare(`
+      SELECT 
+        DATE(sessionStart) AS date,
+        AVG(avgFocus) AS focusScore,
+        COUNT(*) AS sessionCount
+      FROM UserSession
+      WHERE UserID = ?
+        AND sessionStart >= datetime('now', ?)
+      GROUP BY DATE(sessionStart)
+      ORDER BY date ASC
+    `).all(userId, dateFilter);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch focus data" });
+  }
+});
+
+// Weekly summary - for the diamond wheel
+app.get("/metrics/weekly-summary/:userId", (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = db.prepare(`
+      SELECT
+        CAST(strftime('%w', sessionStart) AS INTEGER) AS dayIndex,
+        AVG(avgFocus) * 33 AS focus,
+        AVG(avgFocus) * 28 AS eye,
+        AVG(avgFocus) * 25 AS deep,
+        SUM(activeDuration) AS totalDuration,
+        COUNT(*) AS distractions
+      FROM UserSession
+      WHERE UserID = ?
+        AND sessionStart >= datetime('now', '-7 days')
+      GROUP BY dayIndex
+      ORDER BY dayIndex ASC
+    `).all(userId);
+
+    const week = Array.from({ length: 7 }, (_, i) => {
+      const found = rows.find(r => r.dayIndex === i);
+      return {
+        focus: Math.round(found?.focus || 0),
+        eye: Math.round(found?.eye || 0),
+        deep: Math.round(found?.deep || 0),
+        duration: found ? `${Math.round(found.totalDuration / 60)}m` : '0m',
+        distractions: found?.distractions || 0,
+      };
+    });
+
+    res.json({ success: true, data: week });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch weekly data" });
+  }
+});
+
 //Cleanup job, runs every hour
 //Needs more testing to be done, for now keep as is
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
