@@ -5,7 +5,7 @@ const teamMembers = [
   'Sebastian Gu',
   'Brandon Charnell',
   'Faisal',
-  'Prete Bhele',
+  'Preet Bhele',
 ];
 
 const steps = [
