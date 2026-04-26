@@ -31,7 +31,21 @@ _collection = None
 def _ensure_db():
     """Download and extract focus_db from S3 if not present locally."""
     if os.path.isdir(DB_PATH):
-        return
+        sqlite_path = os.path.join(DB_PATH, "chroma.sqlite3")
+        if os.path.exists(sqlite_path):
+            import sqlite3
+            try:
+                conn = sqlite3.connect(sqlite_path)
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM collections")
+                if cur.fetchone()[0] > 0:
+                    conn.close()
+                    return
+                conn.close()
+            except Exception:
+                pass
+        import shutil
+        shutil.rmtree(DB_PATH)
     import boto3, tarfile, io
     bucket = os.environ.get("S3_BUCKET", "")
     key    = os.environ.get("S3_FOCUS_DB_KEY", "rag/focus_db.tar.gz")
@@ -56,12 +70,9 @@ def _get_collection():
     if _collection is None:
         _ensure_db()
         import chromadb
-        from chromadb.config import Settings
         from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
         ef = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
-        _chroma_client = chromadb.PersistentClient(
-            path=DB_PATH, settings=Settings(anonymized_telemetry=False)
-        )
+        _chroma_client = chromadb.PersistentClient(path=DB_PATH)
         _collection = _chroma_client.get_collection("focus_research", embedding_function=ef)
     return _collection
 
