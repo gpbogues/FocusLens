@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Chart, registerables } from 'chart.js';
 import type { ChartConfiguration } from 'chart.js';
 import './Metrics.css';
+import MonthlyHeatmap from './MonthlyHeatmap';
 
 /*
 TODO:
@@ -480,6 +481,10 @@ const Metrics = () => {
       <div className="metrics-section">
         <DiamondWheel weekData={weekData} />
       </div>
+
+      <div className="metrics-section">
+        <MonthlyHeatmap />
+    </div>
     </div>
   );
 };

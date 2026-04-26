@@ -1,13 +1,37 @@
 .hm-wrapper {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 24px;
-  background-color: var(--color-bg-surface);
+  gap: 16px;
+  padding: 22px;
+  background-color: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  width: fit-content;
+  border-radius: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 30px;
+}
+
+.hm-header {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hm-section-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.hm-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text-bright);
+  margin: 0;
 }
 
 /* Navigation */
@@ -15,13 +39,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
+  justify-content: center;
 }
 
 .hm-nav-label {
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text-primary);
-  min-width: 140px;
+  min-width: 160px;
   text-align: center;
 }
 
@@ -38,7 +64,7 @@
 }
 
 .hm-nav-btn:hover:not(:disabled) {
-  border-color: var(--color-accent);
+  border-color: #26a641;
   color: var(--color-text-primary);
 }
 
@@ -51,18 +77,18 @@
 .hm-graph {
   position: relative;
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 /* Day of week label column */
 .hm-dow-labels {
-  position: absolute;
-  right: calc(100% + 10px);
-  top: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding-top: 2px;
+  padding-top: 20px;
+  flex-shrink: 0;
 }
 
 .hm-dow-label {
@@ -88,9 +114,9 @@
 
 /* Cells */
 .hm-cell {
-  width: 13px;
-  height: 13px;
-  border-radius: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
   cursor: pointer;
   transition: opacity 0.1s;
 }
@@ -101,11 +127,59 @@
   pointer-events: none;
 }
 
-.hm-cell--empty { background-color: #2d2d2d; }
-.hm-cell--l1    { background-color: #0e4429; }
-.hm-cell--l2    { background-color: #006d32; }
-.hm-cell--l3    { background-color: #26a641; }
-.hm-cell--l4    { background-color: #39d353; }
+.hm-cell--empty { background-color: #1e1e2e; }
+.hm-cell--l1    { background-color: #3b1f6e; }
+.hm-cell--l2    { background-color: #5a2fa0; }
+.hm-cell--l3    { background-color: #7F77DD; }
+.hm-cell--l4    { background-color: #AFA9EC; }
+
+/* Light theme overrides — lighter purple scale */
+[data-theme="light"] .hm-cell--empty,
+[data-theme="sunset"] .hm-cell--empty,
+[data-theme="rose"] .hm-cell--empty,
+[data-theme="hydrangea"] .hm-cell--empty,
+[data-theme="pistachio"] .hm-cell--empty,
+[data-theme="softspring"] .hm-cell--empty { background-color: #edeeff; }
+
+[data-theme="light"] .hm-cell--l1,
+[data-theme="sunset"] .hm-cell--l1,
+[data-theme="rose"] .hm-cell--l1,
+[data-theme="hydrangea"] .hm-cell--l1,
+[data-theme="pistachio"] .hm-cell--l1,
+[data-theme="softspring"] .hm-cell--l1 { background-color: #CECBF6; }
+
+[data-theme="light"] .hm-cell--l2,
+[data-theme="sunset"] .hm-cell--l2,
+[data-theme="rose"] .hm-cell--l2,
+[data-theme="hydrangea"] .hm-cell--l2,
+[data-theme="pistachio"] .hm-cell--l2,
+[data-theme="softspring"] .hm-cell--l2 { background-color: #AFA9EC; }
+
+[data-theme="light"] .hm-cell--l3,
+[data-theme="sunset"] .hm-cell--l3,
+[data-theme="rose"] .hm-cell--l3,
+[data-theme="hydrangea"] .hm-cell--l3,
+[data-theme="pistachio"] .hm-cell--l3,
+[data-theme="softspring"] .hm-cell--l3 { background-color: #7F77DD; }
+
+[data-theme="light"] .hm-cell--l4,
+[data-theme="sunset"] .hm-cell--l4,
+[data-theme="rose"] .hm-cell--l4,
+[data-theme="hydrangea"] .hm-cell--l4,
+[data-theme="pistachio"] .hm-cell--l4,
+[data-theme="softspring"] .hm-cell--l4 { background-color: #534AB7; }
+
+/* Dark wrapper bg for dark themes */
+[data-theme="dark"] .hm-wrapper,
+[data-theme="stormy"] .hm-wrapper { background-color: var(--color-bg-elevated); }
+
+/* Light wrapper bg for light themes */
+[data-theme="light"] .hm-wrapper,
+[data-theme="sunset"] .hm-wrapper,
+[data-theme="rose"] .hm-wrapper,
+[data-theme="hydrangea"] .hm-wrapper,
+[data-theme="pistachio"] .hm-wrapper,
+[data-theme="softspring"] .hm-wrapper { background-color: var(--color-bg-elevated); }
 
 .hm-cell:not(.hm-cell--pad):hover {
   opacity: 0.75;
@@ -115,14 +189,14 @@
 .hm-tooltip {
   position: absolute;
   transform: translate(-50%, calc(-100% - 10px));
-  background-color: var(--color-bg-deep, #111);
+  background-color: #1c2128;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 10px 14px;
   pointer-events: none;
   white-space: nowrap;
   z-index: 100;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   min-width: 160px;
 }
 
@@ -146,7 +220,7 @@
 }
 
 .hm-tooltip-value {
-  color: var(--color-text-primary);
+  color: #7F77DD;
   font-weight: 500;
 }
 
