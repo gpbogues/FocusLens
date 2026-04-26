@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"python ../dmb.py\"",
+    "dev": "concurrently \"vite\" \"python3 ../dmb.py\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
