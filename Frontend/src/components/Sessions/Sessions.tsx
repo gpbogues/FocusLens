@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import './Sessions.css';
 
 
@@ -30,6 +31,12 @@ interface Session {
   avgFocus: number;
   activeDuration: number;
   sessionFeedback: string | null;
+}
+
+interface SessionChunk {
+  ChunkId: number;
+  chunkStatus: 'VF' | 'SF' | 'SU' | 'VU';
+  endOfChunk: string;
 }
 
 interface Folder {
@@ -128,6 +135,23 @@ const DotsIcon = () => (
   </svg>
 );
 
+const ChartIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="1" y="9" width="3" height="6" rx="1" fill="currentColor"/>
+    <rect x="6" y="5" width="3" height="10" rx="1" fill="currentColor"/>
+    <rect x="11" y="1" width="3" height="14" rx="1" fill="currentColor"/>
+  </svg>
+);
+
+const CHUNK_COLORS: Record<string, string> = {
+  VF: '#1a7a1a',
+  SF: '#7ec850',
+  SU: '#e8c32a',
+  VU: '#d94040',
+};
+
+const CHUNK_LABELS = ['VF', 'SF', 'SU', 'VU'] as const;
+
 const Sessions = () => {
   const { user, sessionTrigger } = useAuth();
   const location = useLocation();
@@ -149,6 +173,9 @@ const Sessions = () => {
   const [sessionModal, setSessionModal] = useState<{ type: SessionModalType; session: Session } | null>(null);
   const [modalInput, setModalInput] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
+  const [chunksModal, setChunksModal] = useState<{ session: Session } | null>(null);
+  const [modalChunks, setModalChunks] = useState<SessionChunk[]>([]);
+  const [chunksLoading, setChunksLoading] = useState(false);
 
   //Tab state, initialised from navigation state to avoid a second render/double-fetch on mount
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -436,6 +463,23 @@ const Sessions = () => {
     }
   };
 
+  const openChunksModal = async (session: Session) => {
+    setChunksModal({ session });
+    setModalChunks([]);
+    setChunksLoading(true);
+    try {
+      const data = await fetch(
+        `${API_URL}/sessions/${session.SessionID}/chunks`,
+        { credentials: 'include' }
+      ).then(r => r.json());
+      if (data.success) setModalChunks(data.data);
+    } catch (err) {
+      console.error('Chunks fetch error:', err);
+    } finally {
+      setChunksLoading(false);
+    }
+  };
+
   const handleFolderPickerSave = async () => {
     if (!pickerTargetSession) return;
     setPickerLoading(true);
@@ -604,6 +648,13 @@ const Sessions = () => {
           <span className="session-card-name">{displayName}</span>
           <span className="session-card-date">{start.date}</span>
           <button
+            className="session-chunks-btn"
+            onClick={e => { e.stopPropagation(); openChunksModal(session); }}
+            title="Session Details"
+          >
+            <ChartIcon />
+          </button>
+          <button
             className="session-expand-btn"
             onClick={() => handleExpand(i)}
           >
@@ -665,6 +716,13 @@ const Sessions = () => {
         <div className="session-card-header">
           <span className="session-card-name">{displayName}</span>
           <span className="session-card-date">{start.date}</span>
+          <button
+            className="session-chunks-btn"
+            onClick={e => { e.stopPropagation(); openChunksModal(session); }}
+            title="Session Details"
+          >
+            <ChartIcon />
+          </button>
           {renderDotsMenu(session, i, inFolderView)}
         </div>
         <div className="session-grid-stats">
@@ -1136,6 +1194,121 @@ const Sessions = () => {
           </div>
         </div>
       )}
+
+      {/* Session Details (Chunks) Modal */}
+      {chunksModal && (() => {
+        const session = chunksModal.session;
+
+        const statusCounts = modalChunks.reduce<Record<string, number>>((acc, c) => {
+          acc[c.chunkStatus] = (acc[c.chunkStatus] ?? 0) + 1;
+          return acc;
+        }, {});
+
+        const donutData = CHUNK_LABELS
+          .filter(label => statusCounts[label] > 0)
+          .map(label => ({ name: label, value: statusCounts[label] }));
+
+        const parseTS = (str: string): number => new Date(str.replace(' ', 'T')).getTime();
+
+        const sessionStartMs = parseTS(session.sessionStart);
+        const sessionEndMs = session.sessionEnd
+          ? parseTS(session.sessionEnd)
+          : (modalChunks.length > 0 ? parseTS(modalChunks[modalChunks.length - 1].endOfChunk) : sessionStartMs);
+        const totalMs = sessionEndMs - sessionStartMs;
+
+        const segments = modalChunks.map((chunk, idx) => {
+          const chunkStartMs = idx === 0 ? sessionStartMs : parseTS(modalChunks[idx - 1].endOfChunk);
+          const chunkEndMs = parseTS(chunk.endOfChunk);
+          const widthPct = totalMs > 0 ? ((chunkEndMs - chunkStartMs) / totalMs) * 100 : 0;
+          return { ...chunk, widthPct };
+        });
+
+        const tlStart = formatDateTime(session.sessionStart).time;
+        const tlEnd = formatDateTime(session.sessionEnd).time;
+
+        return (
+          <div className="modal-overlay" onClick={() => setChunksModal(null)}>
+            <div className="modal-box chunks-modal-box" onClick={e => e.stopPropagation()}>
+
+              <button className="chunks-modal-close" onClick={() => setChunksModal(null)}>✕</button>
+
+              <div className="chunks-modal-header">
+                <p className="modal-title">{session.sessionName || formatDateTime(session.sessionStart).date}</p>
+                <span className="chunks-avg-focus-label">
+                  Avg Focus: <strong>{session.avgFocus.toFixed(1)}</strong> / 3
+                </span>
+              </div>
+
+              {chunksLoading ? (
+                <p className="modal-subtitle" style={{ textAlign: 'center', padding: '40px 0' }}>Loading chunks...</p>
+              ) : modalChunks.length === 0 ? (
+                <p className="modal-subtitle" style={{ textAlign: 'center', padding: '40px 0' }}>No chunk data recorded for this session.</p>
+              ) : (
+                <>
+                  <div className="chunks-legend">
+                    {CHUNK_LABELS.filter(l => statusCounts[l] > 0).map(label => (
+                      <div key={label} className="chunks-legend-item">
+                        <span className="chunks-legend-dot" style={{ background: CHUNK_COLORS[label] }} />
+                        <span className="chunks-legend-label">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="chunks-chart-container">
+                    <PieChart width={200} height={200}>
+                      <Pie
+                        data={donutData}
+                        cx={100}
+                        cy={100}
+                        innerRadius={60}
+                        outerRadius={90}
+                        dataKey="value"
+                        startAngle={90}
+                        endAngle={-270}
+                        strokeWidth={0}
+                      >
+                        {donutData.map(entry => (
+                          <Cell key={entry.name} fill={CHUNK_COLORS[entry.name]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number, name: string) => [value + ' chunks', name]}
+                        contentStyle={{
+                          background: 'var(--color-bg-surface)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                        }}
+                      />
+                    </PieChart>
+                    <div className="chunks-donut-center">
+                      <span className="chunks-donut-value">{session.avgFocus.toFixed(1)}</span>
+                      <span className="chunks-donut-sublabel">avg focus</span>
+                    </div>
+                  </div>
+
+                  <div className="chunks-timeline-section">
+                    <div className="chunks-timeline-bar">
+                      {segments.map(seg => (
+                        <div
+                          key={seg.ChunkId}
+                          className="chunks-timeline-segment"
+                          style={{ width: `${seg.widthPct}%`, background: CHUNK_COLORS[seg.chunkStatus] }}
+                          title={seg.chunkStatus}
+                        />
+                      ))}
+                    </div>
+                    <div className="chunks-timeline-labels">
+                      <span>{tlStart}</span>
+                      <span>{tlEnd}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

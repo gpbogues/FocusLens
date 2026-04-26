@@ -369,6 +369,23 @@ app.get("/sessions/:sessionId/folders", (req, res) => {
   }
 });
 
+//Returns all chunks for a session ordered chronologically, used by the Session Details modal
+app.get("/sessions/:sessionId/chunks", (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const rows = db.prepare(
+      `SELECT ChunkId, chunkStatus, endOfChunk
+       FROM SessionChunk
+       WHERE SessionID = ?
+       ORDER BY endOfChunk ASC`
+    ).all(sessionId);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("Chunks fetch error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch session chunks" });
+  }
+});
+
 //Fetches 3 most recent sessions for a user (based on userID), used for homepage session snapshots
 app.get("/sessions/:userId", async (req, res) => {
   const { userId } = req.params;
