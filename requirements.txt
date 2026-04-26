@@ -1,4 +1,10 @@
+flask
+flask-cors
+numpy
+joblib
+requests
+boto3
 opencv-python
-mediapipe==0.10.5
+mediapipe==0.10.33
 chromadb
 sentence-transformers
