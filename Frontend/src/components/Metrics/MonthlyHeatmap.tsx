@@ -158,7 +158,7 @@ const MonthlyHeatmap = () => {
                 key={col}
                 style={{
                   position: 'absolute',
-                  left: col * 16,
+                  left: col * 20,
                   fontSize: 11,
                   color: 'var(--color-text-muted)',
                   whiteSpace: 'nowrap',
@@ -198,7 +198,7 @@ const MonthlyHeatmap = () => {
 
         {/* Tooltip */}
         {tooltip.visible && (
-          <div className="hm-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+          <div className="hm-tooltip" style={{ left: tooltip.x, top: tooltip.y + 20}}>
             <p className="hm-tooltip-date">{tooltip.dateLabel}</p>
             {tooltip.data ? (
               <>

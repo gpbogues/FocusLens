@@ -188,7 +188,7 @@
 /* Tooltip */
 .hm-tooltip {
   position: absolute;
-  transform: translate(-50%, calc(-100% - 10px));
+  transform: translate(-50%, 0);
   background-color: #1c2128;
   border: 1px solid var(--color-border);
   border-radius: 8px;
