@@ -950,10 +950,11 @@ app.get("/metrics/focus-over-time/:userId", (req, res) => {
 
   try {
     const rows = db.prepare(`
-      SELECT 
+      SELECT
         DATE(sessionStart) AS date,
         AVG(avgFocus) AS focusScore,
-        COUNT(*) AS sessionCount
+        COUNT(*) AS sessionCount,
+        SUM(activeDuration) AS totalDuration
       FROM UserSession
       WHERE UserID = ?
         AND sessionStart >= datetime('now', ?)
