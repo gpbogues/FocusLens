@@ -857,3 +857,158 @@
 .feedback-inline-header:first-child {
   margin-top: 0;
 }
+
+/* ===== Session Details (Chunks) Modal ===== */
+
+.chunks-modal-box {
+  width: 640px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.chunks-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.chunks-modal-close:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+}
+
+.chunks-modal-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-right: 32px;
+}
+
+.chunks-avg-focus-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.chunks-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chunks-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chunks-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.chunks-legend-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+}
+
+.chunks-chart-container {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin: 0 auto;
+}
+
+.chunks-donut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.chunks-donut-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.chunks-donut-sublabel {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 3px;
+}
+
+.chunks-timeline-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chunks-timeline-bar {
+  display: flex;
+  width: 100%;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chunks-timeline-segment {
+  height: 100%;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.chunks-timeline-segment:hover {
+  opacity: 0.75;
+}
+
+.chunks-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.session-chunks-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.session-chunks-btn:hover {
+  background-color: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
