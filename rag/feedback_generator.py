@@ -2,17 +2,26 @@ import os, logging, random, requests
 
 logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
 
-# Load rag/.env at import time
-_env_path = os.path.join(os.path.dirname(__file__), ".env")
+# 1. Get the absolute path to the directory containing THIS file
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 2. Look for .env in that same folder
+_env_path = os.path.join(_current_dir, ".env")
+
+# 3. Robustly load environment variables
 if os.path.exists(_env_path):
     with open(_env_path) as _f:
         for _line in _f:
             _line = _line.strip()
             if _line and not _line.startswith("#") and "=" in _line:
                 _k, _v = _line.split("=", 1)
-                os.environ.setdefault(_k.strip(), _v.strip())
+                # Set the variable, stripping extra spaces from both key and value
+                os.environ[_k.strip()] = _v.strip()
+else:
+    print(f"[RAG WARNING] .env not found at: {_env_path}", flush=True)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "focus_db")
+# 4. Set DB_PATH relative to this file as well
+DB_PATH = os.path.join(_current_dir, "focus_db")
 
 # Lazy singletons, initialized on first call, reused across sessions
 _chroma_client = None

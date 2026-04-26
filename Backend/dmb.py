@@ -405,16 +405,47 @@ def generate_session_feedback():
     stats_snapshot = dict(_session_last_stats)
 
     def _run(stats):
+        # Let's search the ENTIRE project folder for that file
+        root_to_search = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+        print(f"[SEARCH] Searching for feedback_generator.py starting from: {root_to_search}")
+
+        for root, dirs, files in os.walk(root_to_search):
+            if "feedback_generator.py" in files:
+                print(f"[FOUND IT!] Actual path: {os.path.join(root, 'feedback_generator.py')}")
         try:
-            # Lazy import — avoids loading SentenceTransformer at Flask startup
-            _rag_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag")
-            if _rag_path not in sys.path:
-                sys.path.insert(0, _rag_path)
-            from feedback_generator import generate_feedback
+            import importlib.util
+            _script_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # List all possible places the file could be
+            # List all possible places the file could be
+            possible_paths = [
+                os.path.join(_script_dir, "..", "rag", "feedback_generator.py"), # This is the winner!
+                os.path.join(_script_dir, "..", "frontend", "rag", "feedback_generator.py"),
+                os.path.join(_script_dir, "rag", "feedback_generator.py")
+            ]
+            
+            _rag_path = None
+            for p in possible_paths:
+                full_path = os.path.normpath(p)
+                print(f"[DEBUG] Checking: {full_path}")
+                if os.path.exists(full_path):
+                    _rag_path = full_path
+                    break
 
-            print("[FEEDBACK] Generating...", flush=True)
-            report = generate_feedback(**stats)
+            if not _rag_path:
+                # If we still can't find it, list the files in the rag folder to see what's wrong
+                parent_dir = os.path.normpath(os.path.join(_script_dir, "..", "frontend", "rag"))
+                if os.path.exists(parent_dir):
+                    print(f"[DEBUG] Files in {parent_dir}: {os.listdir(parent_dir)}")
+                raise FileNotFoundError("Could not find feedback_generator.py in any expected location.")
 
+            # Load the module
+            spec = importlib.util.spec_from_file_location("feedback_generator", _rag_path)
+            fb_gen = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(fb_gen)
+
+            print(f"[FEEDBACK] Success! Loaded from: {_rag_path}", flush=True)
+            report = fb_gen.generate_feedback(**stats)
             if _feedback_cancelled.is_set():
                 print("[FEEDBACK] Cancelled — discarding result", flush=True)
                 return
