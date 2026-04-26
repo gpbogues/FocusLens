@@ -17,12 +17,7 @@ interface TooltipState {
   dateLabel: string;
 }
 
-const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
-
-const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function getColorClass(count: number): string {
   if (count === 0) return 'hm-cell--empty';
@@ -42,34 +37,11 @@ function formatDuration(seconds: number): string {
 }
 
 function formatFocus(avg: number): string {
-  // avgFocus is 0–3 scale; display as percentage
   return `${Math.round((avg / 3) * 100)}%`;
 }
 
-// Returns a grid of ISO date strings (or null for padding cells) laid out as
-// columns = calendar weeks, rows = Mon–Sun (index 0–6).
-function buildGrid(year: number, month: number): (string | null)[][] {
-  const daysInMonth = new Date(year, month, 0).getDate();
-  // Day of week of the 1st (0=Sun&6=Sat) into convert to Mon-based (0=Mon&6=Sun)
-  const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7;
-
-  const weeks: (string | null)[][] = [];
-  let week: (string | null)[] = Array(firstDow).fill(null);
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const iso = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    week.push(iso);
-    if (week.length === 7) {
-      weeks.push(week);
-      week = [];
-    }
-  }
-  if (week.length > 0) {
-    while (week.length < 7) week.push(null);
-    weeks.push(week);
-  }
-
-  return weeks;
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 const MonthlyHeatmap = () => {
@@ -77,43 +49,71 @@ const MonthlyHeatmap = () => {
   const API_URL = import.meta.env.VITE_API_URL;
 
   const now = new Date();
-  const [year, setYear]   = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
   const [dataMap, setDataMap] = useState<Record<string, DayData>>({});
   const [loading, setLoading] = useState(false);
-
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false, x: 0, y: 0, data: null, dateLabel: '',
   });
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Build rolling 52-week window ending today, starting on Monday
+  const endDate   = new Date(now);
+  const startDate = new Date(now);
+  startDate.setFullYear(startDate.getFullYear() - 1);
+  // Back to Monday
+  const dow = startDate.getDay();
+  const daysToMon = dow === 0 ? 6 : dow - 1;
+  startDate.setDate(startDate.getDate() - daysToMon);
+
   useEffect(() => {
     if (!user?.userId) return;
+    // Fetch all months in our window
+    const monthsNeeded = new Set<string>();
+    const d = new Date(startDate);
+    while (d <= endDate) {
+      monthsNeeded.add(`${d.getFullYear()}-${d.getMonth() + 1}`);
+      d.setMonth(d.getMonth() + 1);
+    }
     setLoading(true);
-    fetch(
-      `${API_URL}/sessions/metrics/monthly/${user.userId}?year=${year}&month=${String(month).padStart(2, '0')}`,
-      { credentials: 'include' }
-    )
-      .then(r => r.json())
-      .then(json => {
-        if (json.success) {
-          const map: Record<string, DayData> = {};
-          for (const row of json.data) map[row.day] = row;
-          setDataMap(map);
-        }
+    Promise.all(
+      Array.from(monthsNeeded).map(ym => {
+        const [y, m] = ym.split('-');
+        return fetch(
+          `${API_URL}/sessions/metrics/monthly/${user.userId}?year=${y}&month=${m}`,
+          { credentials: 'include' }
+        ).then(r => r.json()).catch(() => ({ success: false, data: [] }));
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [user?.userId, year, month]);
+    ).then(results => {
+      const map: Record<string, DayData> = {};
+      for (const json of results) {
+        if (json.success) {
+          for (const row of json.data) map[row.day] = row;
+        }
+      }
+      setDataMap(map);
+    }).finally(() => setLoading(false));
+  }, [user?.userId]);
 
-  function navigate(delta: number) {
-    let m = month + delta;
-    let y = year;
-    if (m < 1)  { m = 12; y--; }
-    if (m > 12) { m = 1;  y++; }
-    setMonth(m);
-    setYear(y);
+  // Build grid: columns = weeks (Mon-Sun), rows = day of week
+  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+  const totalWeeks = Math.ceil(totalDays / 7);
+
+  // Month labels
+  const monthLabels: { col: number; label: string }[] = [];
+  let lastMonth = -1;
+  for (let col = 0; col < totalWeeks; col++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + col * 7);
+    if (d.getMonth() !== lastMonth) {
+      lastMonth = d.getMonth();
+      monthLabels.push({
+        col,
+        label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()],
+      });
+    }
   }
+
+  const todayStr = toDateStr(now);
 
   function handleMouseEnter(e: React.MouseEvent, iso: string) {
     const container = containerRef.current;
@@ -123,7 +123,7 @@ const MonthlyHeatmap = () => {
     setTooltip({
       visible: true,
       x: cellRect.left - rect.left + cellRect.width / 2,
-      y: cellRect.top  - rect.top,
+      y: cellRect.top - rect.top,
       data: dataMap[iso] ?? null,
       dateLabel: new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
@@ -135,58 +135,70 @@ const MonthlyHeatmap = () => {
     setTooltip(t => ({ ...t, visible: false }));
   }
 
-  const grid = buildGrid(year, month);
-
   return (
     <div className="hm-wrapper">
-      <div className="hm-nav">
-        <button className="hm-nav-btn" onClick={() => navigate(-1)} aria-label="Previous month">&#8249;</button>
-        <span className="hm-nav-label">{MONTH_NAMES[month - 1]} {year}</span>
-        <button
-          className="hm-nav-btn"
-          onClick={() => navigate(1)}
-          disabled={year === now.getFullYear() && month === now.getMonth() + 1}
-          aria-label="Next month"
-        >
-          &#8250;
-        </button>
+      <div className="hm-header">
+        <p className="hm-section-label">Activity</p>
+        <h3 className="hm-title">Session heatmap</h3>
       </div>
-
-      <div className="hm-graph" ref={containerRef}>
-        {/* Day of week labels */}
+      <div className="hm-graph" ref={containerRef} style={{ width: '100%', overflowX: 'auto' }}>
+        {/* Day labels */}
         <div className="hm-dow-labels">
           {DAY_LABELS.map(d => (
             <span key={d} className="hm-dow-label">{d}</span>
           ))}
         </div>
 
-        {/* Calendar grid: one column per week */}
-        <div className="hm-grid">
-          {grid.map((week, wi) => (
-            <div key={wi} className="hm-week">
-              {week.map((iso, di) => {
-                if (!iso) return <div key={di} className="hm-cell hm-cell--pad" />;
-                const count = dataMap[iso]?.sessionCount ?? 0;
-                return (
-                  <div
-                    key={iso}
-                    className={`hm-cell ${getColorClass(count)}`}
-                    onMouseEnter={e => handleMouseEnter(e, iso)}
-                    onMouseLeave={handleMouseLeave}
-                    aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
-                  />
-                );
-              })}
-            </div>
-          ))}
+        {/* Grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {/* Month labels */}
+          <div style={{ display: 'flex', gap: 3, marginBottom: 6, height: 14, position: 'relative', marginLeft: 0 }}>
+            {monthLabels.map(({ col, label }) => (
+              <div
+                key={col}
+                style={{
+                  position: 'absolute',
+                  left: col * 20,
+                  fontSize: 11,
+                  color: 'var(--color-text-muted)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+
+          {/* Cells */}
+          <div className="hm-grid">
+            {Array.from({ length: totalWeeks }, (_, col) => (
+              <div key={col} className="hm-week">
+                {Array.from({ length: 7 }, (_, row) => {
+                  const d = new Date(startDate);
+                  d.setDate(d.getDate() + col * 7 + row);
+                  if (d > endDate) return <div key={row} className="hm-cell hm-cell--pad" />;
+                  const iso   = toDateStr(d);
+                  const count = dataMap[iso]?.sessionCount ?? 0;
+                  const isToday = iso === todayStr;
+                  return (
+                    <div
+                      key={iso}
+                      className={`hm-cell ${getColorClass(count)}`}
+                      style={isToday ? { outline: '1px solid #7F77DD', outlineOffset: '1px' } : undefined}
+                      onMouseEnter={e => handleMouseEnter(e, iso)}
+                      onMouseLeave={handleMouseLeave}
+                      aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Tooltip */}
         {tooltip.visible && (
-          <div
-            className="hm-tooltip"
-            style={{ left: tooltip.x, top: tooltip.y }}
-          >
+          <div className="hm-tooltip" style={{ left: tooltip.x, top: tooltip.y + 20}}>
             <p className="hm-tooltip-date">{tooltip.dateLabel}</p>
             {tooltip.data ? (
               <>
@@ -223,7 +235,7 @@ const MonthlyHeatmap = () => {
         <span className="hm-legend-label">More</span>
       </div>
 
-      {loading && <p className="hm-loading">Loading...</p>}
+      {loading && <p className="hm-loading">Loading…</p>}
     </div>
   );
 };
