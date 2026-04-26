@@ -158,7 +158,7 @@ const MonthlyHeatmap = () => {
                 key={col}
                 style={{
                   position: 'absolute',
-                  left: col * 20,
+                  left: col * 13,
                   fontSize: 11,
                   color: 'var(--color-text-muted)',
                   whiteSpace: 'nowrap',
