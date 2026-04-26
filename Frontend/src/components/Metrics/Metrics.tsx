@@ -228,6 +228,7 @@ const Metrics = () => {
   const [range, setRange]               = useState<Range>('7D');
   const [focusData, setFocusData]       = useState<number[]>([]);
   const [eyeData, setEyeData]           = useState<number[]>([]);
+  const [chartLabels, setChartLabels]   = useState<string[]>([]);
   const [sessionCount, setSessionCount] = useState<number | null>(null);
   const [loading, setLoading]           = useState(true);
   const [weekData, setWeekData]         = useState<DayMetric[]>([]);
@@ -245,6 +246,7 @@ const Metrics = () => {
     const fetchLineData = async () => {
       setLoading(true);
       setSessionCount(null);
+      setChartLabels([]);
       setFocusData([]);
       setEyeData([]);
       try {
@@ -254,6 +256,7 @@ const Metrics = () => {
         );
         const json: FocusResponse = await res.json();
         if (json.success && json.data.length > 0) {
+          setChartLabels(json.data.map((d: any) => d.date));
           setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
           setEyeData(json.data.map((d: any) => Math.round(d.eyeContact || 0)));
           setSessionCount(json.data.reduce((sum: number, d: any) => sum + (d.sessionCount || 0), 0));
@@ -300,7 +303,7 @@ const Metrics = () => {
     const config: ChartConfiguration = {
       type: 'line',
       data: {
-        labels: getLabels(range),
+        labels: chartLabels.length ? chartLabels : getLabels(range),
         datasets: [
           {
             label: 'Focus Score',
@@ -357,7 +360,7 @@ const Metrics = () => {
 
     chartRef.current = new Chart(canvasRef.current, config);
     return () => chartRef.current?.destroy();
-  }, [focusData, eyeData, range, showFocus, showEye]);
+  }, [focusData, eyeData, range, showFocus, showEye, chartLabels]);
 
   return (
     <div className="metrics-page">
