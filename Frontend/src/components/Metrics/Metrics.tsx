@@ -36,7 +36,8 @@ interface WeeklyResponse {
 
 Chart.register(...registerables);
 
-type Range = '7D' | '1M' | '1Y';
+type Range  = '7D' | '1M' | '1Y';
+type Metric = 'focus' | 'time' | 'sessions';
 
 interface DayMetric {
   focus: number;
@@ -234,16 +235,15 @@ const Metrics = () => {
 
   const [range, setRange]                   = useState<Range>('7D');
   const [focusData, setFocusData]           = useState<number[]>([]);
-  const [eyeData, setEyeData]               = useState<number[]>([]);
+  const [durationData, setDurationData]     = useState<number[]>([]);
+  const [sessionData, setSessionData]       = useState<number[]>([]);
   const [chartLabels, setChartLabels]       = useState<string[]>([]);
   const [sessionCount, setSessionCount]     = useState<number | null>(null);
   const [totalDuration, setTotalDuration]   = useState<number | null>(null);
   const [loading, setLoading]               = useState(true);
   const [weekData, setWeekData]             = useState<DayMetric[]>([]);
 
-  // ── graph toggle state ────────────────────────────────────────────────────
-  const [showFocus, setShowFocus] = useState(true);
-  const [showEye,   setShowEye]   = useState(true);
+  const [activeMetric, setActiveMetric] = useState<Metric>('focus');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
@@ -257,7 +257,8 @@ const Metrics = () => {
       setTotalDuration(null);
       setChartLabels([]);
       setFocusData([]);
-      setEyeData([]);
+      setDurationData([]);
+      setSessionData([]);
       try {
         const res = await fetch(
           `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
@@ -267,7 +268,8 @@ const Metrics = () => {
         if (json.success && json.data.length > 0) {
           setChartLabels(json.data.map((d: any) => d.date));
           setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
-          setEyeData(json.data.map((d: any) => Math.round(d.eyeContact || 0)));
+          setDurationData(json.data.map((d: any) => Math.round((d.totalDuration || 0) / 60)));
+          setSessionData(json.data.map((d: any) => d.sessionCount || 0));
           setSessionCount(json.data.reduce((sum: number, d: any) => sum + (d.sessionCount || 0), 0));
           setTotalDuration(json.data.reduce((sum: number, d: any) => sum + (d.totalDuration || 0), 0));
         }
@@ -303,42 +305,38 @@ const Metrics = () => {
     if (!canvasRef.current || focusData.length === 0) return;
     chartRef.current?.destroy();
 
-    const accent  = cssVar('--color-accent')      || '#646cff';
-    const success = cssVar('--color-success')     || '#22c55e';
-    const muted   = cssVar('--color-text-muted')  || '#6b7280';
-    const border  = cssVar('--color-border')      || '#404040';
-    const bright  = cssVar('--color-text-bright') || '#e5e7eb';
+    const accent   = cssVar('--color-accent')      || '#646cff';
+    const muted    = cssVar('--color-text-muted')  || '#6b7280';
+    const border   = cssVar('--color-border')      || '#404040';
+    const bright   = cssVar('--color-text-bright') || '#e5e7eb';
     const elevated = cssVar('--color-bg-elevated') || '#242424';
+    const orange   = '#f59e0b';
+    const blue     = '#3b82f6';
+
+    const metricConfig = {
+      focus:    { data: focusData,    color: accent,  dash: [],     label: 'Avg Focus'   },
+      time:     { data: durationData, color: orange,  dash: [5, 3], label: 'Total Time'  },
+      sessions: { data: sessionData,  color: blue,    dash: [2, 4], label: 'Sessions'    },
+    }[activeMetric];
+
+    const rawMax = metricConfig.data.length > 0 ? Math.max(...metricConfig.data) : 100;
+    const yMax   = Math.max(Math.ceil(rawMax * 1.15 / 5) * 5, 5);
 
     const config: ChartConfiguration = {
       type: 'line',
       data: {
         labels: chartLabels.length ? chartLabels : getLabels(range),
-        datasets: [
-          {
-            label: 'Focus Score',
-            data: showFocus ? focusData : [],
-            borderColor: accent,
-            backgroundColor: accent + '26',
-            fill: true, tension: 0.45, pointRadius: 3,
-            pointBackgroundColor: accent,
-            pointBorderColor: elevated,
-            pointBorderWidth: 2, borderWidth: 2,
-            hidden: !showFocus,
-          },
-          {
-            label: 'Eye Contact %',
-            data: showEye ? eyeData : [],
-            borderColor: success,
-            backgroundColor: success + '1e',
-            fill: true, tension: 0.45, pointRadius: 3,
-            pointBackgroundColor: success,
-            pointBorderColor: elevated,
-            pointBorderWidth: 2, borderWidth: 2,
-            borderDash: [5, 3],
-            hidden: !showEye,
-          },
-        ],
+        datasets: [{
+          label: metricConfig.label,
+          data: metricConfig.data,
+          borderColor: metricConfig.color,
+          backgroundColor: metricConfig.color + '26',
+          fill: true, tension: 0.45, pointRadius: 3,
+          pointBackgroundColor: metricConfig.color,
+          pointBorderColor: elevated,
+          pointBorderWidth: 2, borderWidth: 2,
+          borderDash: metricConfig.dash,
+        }],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -349,7 +347,16 @@ const Metrics = () => {
             backgroundColor: cssVar('--color-bg-surface') || '#1a1a1a',
             borderColor: border, borderWidth: 1,
             titleColor: bright, bodyColor: muted, padding: 12,
-            callbacks: { label: (ctx: any) => ` ${ctx.dataset.label}: ${Math.round(ctx.raw as number)}` },
+            callbacks: {
+              label: (ctx: any) => {
+                const val = Math.round(ctx.raw as number);
+                if (activeMetric === 'focus')    return ` Avg Focus: ${val}/100`;
+                if (activeMetric === 'sessions') return ` Sessions: ${val}`;
+                const h = Math.floor(val / 60);
+                const m = val % 60;
+                return ` Total Time: ${h > 0 ? `${h}h ${m}m` : `${m}m`}`;
+              },
+            },
           },
         },
         scales: {
@@ -359,9 +366,20 @@ const Metrics = () => {
             border: { color: border },
           },
           y: {
-            min: 0, max: 100,
+            min: 0,
+            max: yMax,
             grid: { color: border + '44' },
-            ticks: { color: muted, font: { size: 11 }, stepSize: 20 },
+            ticks: {
+              color: muted, font: { size: 11 },
+              callback: (v: any) => {
+                if (activeMetric === 'time') {
+                  const h = Math.floor((v as number) / 60);
+                  const m = (v as number) % 60;
+                  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                }
+                return v;
+              },
+            },
             border: { color: border },
           },
         },
@@ -370,7 +388,7 @@ const Metrics = () => {
 
     chartRef.current = new Chart(canvasRef.current, config);
     return () => chartRef.current?.destroy();
-  }, [focusData, eyeData, range, showFocus, showEye, chartLabels]);
+  }, [focusData, durationData, sessionData, range, activeMetric, chartLabels]);
 
   return (
     <div className="metrics-page">
@@ -427,29 +445,24 @@ const Metrics = () => {
             ))}
           </div>
 
-          {/* clickable legend toggles */}
+          {/* metric tabs */}
           <div className="metrics-legend">
-            <button
-              className={`metrics-legend-item metrics-legend-btn ${!showFocus ? 'legend-off' : ''}`}
-              onClick={() => setShowFocus(v => !v)}
-              title={showFocus ? 'Hide focus score' : 'Show focus score'}
-            >
-              <svg width="22" height="10" viewBox="0 0 22 10">
-                <line x1="0" y1="5" x2="22" y2="5" stroke="var(--color-accent)" strokeWidth="2" />
-              </svg>
-              <span>Focus score</span>
-            </button>
-
-            <button
-              className={`metrics-legend-item metrics-legend-btn ${!showEye ? 'legend-off' : ''}`}
-              onClick={() => setShowEye(v => !v)}
-              title={showEye ? 'Hide eye contact' : 'Show eye contact'}
-            >
-              <svg width="22" height="10" viewBox="0 0 22 10">
-                <line x1="0" y1="5" x2="22" y2="5" stroke="var(--color-success)" strokeWidth="2" strokeDasharray="5 3" />
-              </svg>
-              <span>Eye contact %</span>
-            </button>
+            {([
+              { key: 'focus',    label: 'Avg focus',  color: 'var(--color-accent)', dash: undefined },
+              { key: 'time',     label: 'Total time', color: '#f59e0b',             dash: '5 3'     },
+              { key: 'sessions', label: 'Sessions',   color: '#3b82f6',             dash: '2 4'     },
+            ] as const).map(({ key, label, color, dash }) => (
+              <button
+                key={key}
+                className={`metrics-legend-item metrics-legend-btn ${activeMetric !== key ? 'legend-off' : ''}`}
+                onClick={() => setActiveMetric(key)}
+              >
+                <svg width="22" height="10" viewBox="0 0 22 10">
+                  <line x1="0" y1="5" x2="22" y2="5" stroke={color} strokeWidth="2" strokeDasharray={dash} />
+                </svg>
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
 
           {loading ? (
