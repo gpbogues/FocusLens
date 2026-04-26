@@ -137,91 +137,109 @@ const MonthlyHeatmap = () => {
 
   return (
     <div className="hm-wrapper">
-      <div className="hm-header">
-        <p className="hm-section-label">Activity</p>
-        <h3 className="hm-title">Session heatmap</h3>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+        <div>
+          <p className="hm-section-label">Activity</p>
+          <h3 className="hm-title">Session heatmap</h3>
+        </div>
       </div>
-      <div className="hm-graph" ref={containerRef} style={{ width: '100%', overflowX: 'auto' }}>
-        {/* Day labels */}
-        <div className="hm-dow-labels">
-          {DAY_LABELS.map(d => (
-            <span key={d} className="hm-dow-label">{d}</span>
-          ))}
-        </div>
 
-        {/* Grid */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {/* Month labels */}
-          <div style={{ display: 'flex', gap: 3, marginBottom: 6, height: 14, position: 'relative', marginLeft: 0 }}>
-            {monthLabels.map(({ col, label }) => (
-              <div
-                key={col}
-                style={{
-                  position: 'absolute',
-                  left: col * 13,
-                  fontSize: 11,
-                  color: 'var(--color-text-muted)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
+      {/* Main body: centered grid + right info panel */}
+      <div style={{ display: 'flex', width: '100%', gap: 24, alignItems: 'flex-start' }}>
+
+        {/* Centered grid */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <div ref={containerRef}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              {/* Day labels */}
+              <div className="hm-dow-labels" style={{ paddingTop: 20 }}>
+                {DAY_LABELS.map(d => (
+                  <span key={d} className="hm-dow-label">{d}</span>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Cells */}
-          <div className="hm-grid">
-            {Array.from({ length: totalWeeks }, (_, col) => (
-              <div key={col} className="hm-week">
-                {Array.from({ length: 7 }, (_, row) => {
-                  const d = new Date(startDate);
-                  d.setDate(d.getDate() + col * 7 + row);
-                  if (d > endDate) return <div key={row} className="hm-cell hm-cell--pad" />;
-                  const iso   = toDateStr(d);
-                  const count = dataMap[iso]?.sessionCount ?? 0;
-                  const isToday = iso === todayStr;
-                  return (
+              {/* Grid + month labels */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <div style={{ height: 20, position: 'relative', marginBottom: 4 }}>
+                  {monthLabels.map(({ col, label }) => (
                     <div
-                      key={iso}
-                      className={`hm-cell ${getColorClass(count)}`}
-                      style={isToday ? { outline: '1px solid #7F77DD', outlineOffset: '1px' } : undefined}
-                      onMouseEnter={e => handleMouseEnter(e, iso)}
-                      onMouseLeave={handleMouseLeave}
-                      aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
-                    />
-                  );
-                })}
+                      key={col}
+                      style={{
+                        position: 'absolute',
+                        left: col * 13,
+                        fontSize: 11,
+                        color: 'var(--color-text-muted)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                <div className="hm-grid">
+                  {Array.from({ length: totalWeeks }, (_, col) => (
+                    <div key={col} className="hm-week">
+                      {Array.from({ length: 7 }, (_, row) => {
+                        const d = new Date(startDate);
+                        d.setDate(d.getDate() + col * 7 + row);
+                        if (d > endDate) return <div key={row} className="hm-cell hm-cell--pad" />;
+                        const iso   = toDateStr(d);
+                        const count = dataMap[iso]?.sessionCount ?? 0;
+                        const isToday = iso === todayStr;
+                        return (
+                          <div
+                            key={iso}
+                            className={`hm-cell ${getColorClass(count)}`}
+                            style={isToday ? { outline: '1px solid #7F77DD', outlineOffset: '1px' } : undefined}
+                            onMouseEnter={e => handleMouseEnter(e, iso)}
+                            onMouseLeave={handleMouseLeave}
+                            aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
 
-        {/* Tooltip */}
-        {tooltip.visible && (
-          <div className="hm-tooltip" style={{ left: tooltip.x, top: tooltip.y + 20}}>
-            <p className="hm-tooltip-date">{tooltip.dateLabel}</p>
-            {tooltip.data ? (
-              <>
-                <p className="hm-tooltip-row">
-                  <span className="hm-tooltip-label">Sessions</span>
-                  <span className="hm-tooltip-value">{tooltip.data.sessionCount}</span>
-                </p>
-                <p className="hm-tooltip-row">
-                  <span className="hm-tooltip-label">Duration</span>
-                  <span className="hm-tooltip-value">{formatDuration(tooltip.data.totalDuration)}</span>
-                </p>
-                <p className="hm-tooltip-row">
-                  <span className="hm-tooltip-label">Avg Focus</span>
-                  <span className="hm-tooltip-value">{formatFocus(tooltip.data.avgFocus)}</span>
-                </p>
-              </>
-            ) : (
-              <p className="hm-tooltip-row">
-                <span className="hm-tooltip-label">No sessions</span>
-              </p>
-            )}
-          </div>
-        )}
+        {/* Fixed right info panel */}
+        <div style={{
+          width: 160,
+          flexShrink: 0,
+          background: 'var(--color-bg-surface)',
+          border: '0.5px solid var(--color-border)',
+          borderRadius: 10,
+          padding: '12px 14px',
+          minHeight: 90,
+          marginRight: 100,
+        }}>
+          {tooltip.visible ? (
+            <>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 8px', lineHeight: 1.4 }}>{tooltip.dateLabel}</p>
+              {tooltip.data ? (
+                <>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Sessions</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{tooltip.data.sessionCount}</span>
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Duration</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatDuration(tooltip.data.totalDuration)}</span>
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Avg Focus</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatFocus(tooltip.data.avgFocus)}</span>
+                  </p>
+                </>
+              ) : (
+                <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>No sessions</p>
+              )}
+            </>
+          ) : (
+            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.5 }}>Hover over a day to see details</p>
+          )}
+        </div>
       </div>
 
       {/* Legend */}
