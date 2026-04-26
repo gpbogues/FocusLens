@@ -58,6 +58,13 @@ function getLabels(range: Range): string[] {
 const avg = (arr: number[]) =>
   arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
 
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -225,13 +232,14 @@ const Metrics = () => {
   const { user } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
 
-  const [range, setRange]               = useState<Range>('7D');
-  const [focusData, setFocusData]       = useState<number[]>([]);
-  const [eyeData, setEyeData]           = useState<number[]>([]);
-  const [chartLabels, setChartLabels]   = useState<string[]>([]);
-  const [sessionCount, setSessionCount] = useState<number | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [weekData, setWeekData]         = useState<DayMetric[]>([]);
+  const [range, setRange]                   = useState<Range>('7D');
+  const [focusData, setFocusData]           = useState<number[]>([]);
+  const [eyeData, setEyeData]               = useState<number[]>([]);
+  const [chartLabels, setChartLabels]       = useState<string[]>([]);
+  const [sessionCount, setSessionCount]     = useState<number | null>(null);
+  const [totalDuration, setTotalDuration]   = useState<number | null>(null);
+  const [loading, setLoading]               = useState(true);
+  const [weekData, setWeekData]             = useState<DayMetric[]>([]);
 
   // ── graph toggle state ────────────────────────────────────────────────────
   const [showFocus, setShowFocus] = useState(true);
@@ -246,6 +254,7 @@ const Metrics = () => {
     const fetchLineData = async () => {
       setLoading(true);
       setSessionCount(null);
+      setTotalDuration(null);
       setChartLabels([]);
       setFocusData([]);
       setEyeData([]);
@@ -260,6 +269,7 @@ const Metrics = () => {
           setFocusData(json.data.map((d: any) => Math.round(d.focusScore || 0)));
           setEyeData(json.data.map((d: any) => Math.round(d.eyeContact || 0)));
           setSessionCount(json.data.reduce((sum: number, d: any) => sum + (d.sessionCount || 0), 0));
+          setTotalDuration(json.data.reduce((sum: number, d: any) => sum + (d.totalDuration || 0), 0));
         }
       } catch (err) {
         console.error('Failed to fetch focus data:', err);
@@ -398,9 +408,9 @@ const Metrics = () => {
                 unit:  focusData.length ? '/100' : '',
               },
               {
-                label: 'Avg eye contact',
-                value: eyeData.length ? `${avg(eyeData)}` : '-',
-                unit:  eyeData.length ? '%' : '',
+                label: 'Total time',
+                value: totalDuration !== null ? formatDuration(totalDuration) : '-',
+                unit:  '',
               },
               {
                 label: 'Sessions',
