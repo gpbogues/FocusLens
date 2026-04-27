@@ -1,8 +1,9 @@
 .metrics-page {
-  width: 97%;
+  width: 100%;
   height: 100%;
   padding: 30px;
   padding-bottom: 60px;
+  box-sizing: border-box;
 }
 
 .metrics-page .page-heading {
