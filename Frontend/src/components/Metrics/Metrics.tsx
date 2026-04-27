@@ -462,10 +462,7 @@ const Metrics = () => {
         </div>
       </div>
 
-      <div className="metrics-section">
-        <DiamondWheel weekData={weekData} />
-      </div>
-
+      
       <div className="metrics-section">
         <MonthlyHeatmap />
     </div>
