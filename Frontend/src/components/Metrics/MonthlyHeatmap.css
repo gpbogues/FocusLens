@@ -114,8 +114,8 @@
 
 /* Cells */
 .hm-cell {
-  width: 11px;
-  height: 11px;
+  width: 14px;
+  height: 14px;
   border-radius: 2px;
   cursor: pointer;
   transition: opacity 0.1s;

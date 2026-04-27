@@ -162,12 +162,12 @@ const MonthlyHeatmap = () => {
               {/* Grid + month labels */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 <div style={{ height: 20, position: 'relative', marginBottom: 4 }}>
-                  {monthLabels.map(({ col, label }) => (
+                  {monthLabels.slice(1).map(({ col, label }) => (
                     <div
                       key={col}
                       style={{
                         position: 'absolute',
-                        left: col * 13,
+                        left: col * 16,
                         fontSize: 11,
                         color: 'var(--color-text-muted)',
                         whiteSpace: 'nowrap',
