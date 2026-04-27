@@ -409,7 +409,7 @@ const Metrics = () => {
               {
                 label: 'Avg focus',
                 value: focusData.length ? `${avg(focusData)}` : '-',
-                unit:  focusData.length ? '/100' : '',
+                unit:  focusData.length ? '%' : '',
               },
               {
                 label: 'Total time',
