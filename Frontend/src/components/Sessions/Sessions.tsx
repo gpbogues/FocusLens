@@ -79,6 +79,16 @@ const calcTotalDuration = (start: string, end: string | null | undefined, active
   return `${seconds}s`;
 };
 
+const formatUTCTime = (dateStr: string): string => {
+  const d = new Date(dateStr.replace(' ', 'T') + 'Z');
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const s = d.getSeconds();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} ${ampm}`;
+};
+
 const formatDateTime = (dateStr: string | null | undefined) => {
   if (!dateStr) return { date: '—', time: '—' };
   const [datePart, timePart] = dateStr.replace(' ', 'T').split('T');
@@ -1293,12 +1303,12 @@ const Sessions = () => {
                         <div
                           key={seg.ChunkId}
                           className="chunks-timeline-segment"
-                          style={{ width: `${seg.widthPct}%`, background: CHUNK_COLORS[seg.chunkStatus] }}
-                          title={seg.chunkStatus}
+                          style={{ width: `${100 / segments.length}%`, background: CHUNK_COLORS[seg.chunkStatus] }}
+                          data-tooltip={`${seg.chunkStatus} · ${formatUTCTime(seg.endOfChunk)}`}
                         />
                       ))}
                     </div>
-                    <div className="chunks-timeline-labels">
+                    <div className="chunks-timeline-ticks">
                       <span>{tlStart}</span>
                       <span>{tlEnd}</span>
                     </div>
