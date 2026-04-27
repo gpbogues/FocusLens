@@ -11,6 +11,7 @@
   box-sizing: border-box;
   margin-bottom: 30px;
   overflow: hidden;
+  min-height: 330px;
 }
 
 .hm-header {
