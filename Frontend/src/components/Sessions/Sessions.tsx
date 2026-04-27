@@ -1272,7 +1272,7 @@ const Sessions = () => {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number, name: string) => [value + ' chunks', name]}
+                        formatter={(value, name) => [value + ' chunks', name]}
                         contentStyle={{
                           background: 'var(--color-bg-surface)',
                           border: '1px solid var(--color-border)',
