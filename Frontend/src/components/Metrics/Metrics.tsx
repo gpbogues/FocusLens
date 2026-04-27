@@ -5,19 +5,6 @@ import type { ChartConfiguration } from 'chart.js';
 import './Metrics.css';
 import MonthlyHeatmap from './MonthlyHeatmap';
 
-/*
-TODO:
-
-Bug:
-  User session duration doesn't seem to update properly.
-
-To add:
-  Add in pulling of info for avgFocus, avgEyeContact for focus over time
-  Add in better filtering for user session dates, based off of wks of
-  Update user session date selection icons for clarity
-
-*/
-
 interface FocusDataPoint {
   date: string;
   focusScore: number;
@@ -250,7 +237,6 @@ const Metrics = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
 
-  // ── fetch line chart data ─────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const fetchLineData = async () => {
@@ -284,7 +270,6 @@ const Metrics = () => {
     fetchLineData();
   }, [range, user]);
 
-  // ── fetch weekly diamond data ─────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const fetchWeekData = async () => {
@@ -302,7 +287,6 @@ const Metrics = () => {
     fetchWeekData();
   }, [user]);
 
-  // ── build / update chart ──────────────────────────────────────────────────
   useEffect(() => {
     if (!canvasRef.current || focusData.length === 0) return;
     chartRef.current?.destroy();
@@ -447,7 +431,6 @@ const Metrics = () => {
             ))}
           </div>
 
-          {/* metric tabs */}
           <div className="metrics-legend">
             {([
               { key: 'focus',    label: 'Avg focus',  color: 'var(--color-accent)', dash: undefined },
