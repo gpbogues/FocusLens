@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell } from 'recharts';
 import './Sessions.css';
 
 
@@ -77,6 +77,16 @@ const calcTotalDuration = (start: string, end: string | null | undefined, active
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
+};
+
+const formatUTCTime = (dateStr: string): string => {
+  const d = new Date(dateStr.replace(' ', 'T') + 'Z');
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const s = d.getSeconds();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} ${ampm}`;
 };
 
 const formatDateTime = (dateStr: string | null | undefined) => {
@@ -176,6 +186,7 @@ const Sessions = () => {
   const [chunksModal, setChunksModal] = useState<{ session: Session } | null>(null);
   const [modalChunks, setModalChunks] = useState<SessionChunk[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
+  const [activeDonutIdx, setActiveDonutIdx] = useState<number | null>(null);
 
   //Tab state, initialised from navigation state to avoid a second render/double-fetch on mount
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -1266,25 +1277,24 @@ const Sessions = () => {
                         startAngle={90}
                         endAngle={-270}
                         strokeWidth={0}
+                        onMouseEnter={(_: any, idx: number) => setActiveDonutIdx(idx)}
+                        onMouseLeave={() => setActiveDonutIdx(null)}
                       >
                         {donutData.map(entry => (
                           <Cell key={entry.name} fill={CHUNK_COLORS[entry.name]} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        formatter={(value: number, name: string) => [value + ' chunks', name]}
-                        contentStyle={{
-                          background: 'var(--color-bg-surface)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                        }}
-                      />
                     </PieChart>
                     <div className="chunks-donut-center">
                       <span className="chunks-donut-value">{session.avgFocus.toFixed(1)}</span>
                       <span className="chunks-donut-sublabel">avg focus</span>
                     </div>
+                    {activeDonutIdx !== null && donutData[activeDonutIdx] && (
+                      <div className="chunks-donut-hover">
+                        <span className="chunks-donut-hover-dot" style={{ background: CHUNK_COLORS[donutData[activeDonutIdx].name] }} />
+                        {donutData[activeDonutIdx].name}: {donutData[activeDonutIdx].value} chunks
+                      </div>
+                    )}
                   </div>
 
                   <div className="chunks-timeline-section">
@@ -1293,12 +1303,12 @@ const Sessions = () => {
                         <div
                           key={seg.ChunkId}
                           className="chunks-timeline-segment"
-                          style={{ width: `${seg.widthPct}%`, background: CHUNK_COLORS[seg.chunkStatus] }}
-                          title={seg.chunkStatus}
+                          style={{ width: `${100 / segments.length}%`, background: CHUNK_COLORS[seg.chunkStatus] }}
+                          data-tooltip={`${seg.chunkStatus} · ${formatUTCTime(seg.endOfChunk)}`}
                         />
                       ))}
                     </div>
-                    <div className="chunks-timeline-labels">
+                    <div className="chunks-timeline-ticks">
                       <span>{tlStart}</span>
                       <span>{tlEnd}</span>
                     </div>
