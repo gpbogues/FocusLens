@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell } from 'recharts';
 import './Sessions.css';
 
 
@@ -176,6 +176,7 @@ const Sessions = () => {
   const [chunksModal, setChunksModal] = useState<{ session: Session } | null>(null);
   const [modalChunks, setModalChunks] = useState<SessionChunk[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
+  const [activeDonutIdx, setActiveDonutIdx] = useState<number | null>(null);
 
   //Tab state, initialised from navigation state to avoid a second render/double-fetch on mount
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -1266,25 +1267,24 @@ const Sessions = () => {
                         startAngle={90}
                         endAngle={-270}
                         strokeWidth={0}
+                        onMouseEnter={(_: any, idx: number) => setActiveDonutIdx(idx)}
+                        onMouseLeave={() => setActiveDonutIdx(null)}
                       >
                         {donutData.map(entry => (
                           <Cell key={entry.name} fill={CHUNK_COLORS[entry.name]} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        formatter={(value, name) => [value + ' chunks', name]}
-                        contentStyle={{
-                          background: 'var(--color-bg-surface)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                        }}
-                      />
                     </PieChart>
                     <div className="chunks-donut-center">
                       <span className="chunks-donut-value">{session.avgFocus.toFixed(1)}</span>
                       <span className="chunks-donut-sublabel">avg focus</span>
                     </div>
+                    {activeDonutIdx !== null && donutData[activeDonutIdx] && (
+                      <div className="chunks-donut-hover">
+                        <span className="chunks-donut-hover-dot" style={{ background: CHUNK_COLORS[donutData[activeDonutIdx].name] }} />
+                        {donutData[activeDonutIdx].name}: {donutData[activeDonutIdx].value} chunks
+                      </div>
+                    )}
                   </div>
 
                   <div className="chunks-timeline-section">
