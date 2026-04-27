@@ -153,7 +153,8 @@ function drawDiamond(canvas: HTMLCanvasElement, focus: number, eye: number, deep
 }
 
 function DiamondWheel({ weekData }: { weekData: DayMetric[] }) {
-  const [selected, setSelected] = useState(0);
+  const todayIndex = (new Date().getDay() + 6) % 7; 
+  const [selected, setSelected] = useState(todayIndex);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const d = weekData[selected];
 
