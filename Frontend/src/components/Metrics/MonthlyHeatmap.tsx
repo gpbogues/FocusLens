@@ -56,18 +56,15 @@ const MonthlyHeatmap = () => {
   });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Build rolling 52-week window ending today, starting on Monday
   const endDate   = new Date(now);
   const startDate = new Date(now);
   startDate.setFullYear(startDate.getFullYear() - 1);
-  // Back to Monday
   const dow = startDate.getDay();
   const daysToMon = dow === 0 ? 6 : dow - 1;
   startDate.setDate(startDate.getDate() - daysToMon);
 
   useEffect(() => {
     if (!user?.userId) return;
-    // Fetch all months in our window
     const monthsNeeded = new Set<string>();
     const d = new Date(startDate);
     while (d <= endDate) {
@@ -94,11 +91,9 @@ const MonthlyHeatmap = () => {
     }).finally(() => setLoading(false));
   }, [user?.userId]);
 
-  // Build grid: columns = weeks (Mon-Sun), rows = day of week
   const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
   const totalWeeks = Math.ceil(totalDays / 7);
 
-  // Month labels
   const monthLabels: { col: number; label: string }[] = [];
   let lastMonth = -1;
   for (let col = 0; col < totalWeeks; col++) {
@@ -137,7 +132,6 @@ const MonthlyHeatmap = () => {
 
   return (
     <div className="hm-wrapper">
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
         <div>
           <p className="hm-section-label">Activity</p>
@@ -145,68 +139,68 @@ const MonthlyHeatmap = () => {
         </div>
       </div>
 
-      {/* Main body: centered grid + right info panel */}
-      <div style={{ display: 'flex', width: '100%', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', width: '100%', gap: 16, alignItems: 'flex-start' }}>
 
-        {/* Centered grid */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-          <div ref={containerRef}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              {/* Day labels */}
-              <div className="hm-dow-labels" style={{ paddingTop: 20 }}>
-                {DAY_LABELS.map(d => (
-                  <span key={d} className="hm-dow-label">{d}</span>
-                ))}
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 24, flexShrink: 0 }}>
+          {DAY_LABELS.map(d => (
+            <span key={d} className="hm-dow-label" style={{ marginBottom: 2 }}>{d}</span>
+          ))}
+        </div>
 
-              {/* Grid + month labels */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                <div style={{ height: 20, position: 'relative', marginBottom: 4 }}>
-                  {monthLabels.slice(1).map(({ col, label }) => (
+        <div ref={containerRef} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+          <div style={{ height: 20, position: 'relative', marginBottom: 4 }}>
+            {monthLabels.slice(1).map(({ col, label }) => (
+              <span
+                key={col}
+                style={{
+                  position: 'absolute',
+                  left: `${(col / totalWeeks) * 100}%`,
+                  fontSize: 11,
+                  color: 'var(--color-text-muted)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${totalWeeks}, 1fr)`,
+            gap: 2,
+            width: '100%',
+          }}>
+            {Array.from({ length: totalWeeks }, (_, col) => (
+              <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {Array.from({ length: 7 }, (_, row) => {
+                  const d = new Date(startDate);
+                  d.setDate(d.getDate() + col * 7 + row);
+                  if (d > endDate) return <div key={row} style={{ height: 13 }} />;
+                  const iso   = toDateStr(d);
+                  const count = dataMap[iso]?.sessionCount ?? 0;
+                  const isToday = iso === todayStr;
+                  return (
                     <div
-                      key={col}
+                      key={iso}
+                      className={`hm-cell ${getColorClass(count)}`}
                       style={{
-                        position: 'absolute',
-                        left: col * 16,
-                        fontSize: 11,
-                        color: 'var(--color-text-muted)',
-                        whiteSpace: 'nowrap',
+                        width: '100%',
+                        height: 13,
+                        borderRadius: 2,
+                        ...(isToday ? { outline: '1px solid #7F77DD', outlineOffset: '1px' } : {}),
                       }}
-                    >
-                      {label}
-                    </div>
-                  ))}
-                </div>
-                <div className="hm-grid">
-                  {Array.from({ length: totalWeeks }, (_, col) => (
-                    <div key={col} className="hm-week">
-                      {Array.from({ length: 7 }, (_, row) => {
-                        const d = new Date(startDate);
-                        d.setDate(d.getDate() + col * 7 + row);
-                        if (d > endDate) return <div key={row} className="hm-cell hm-cell--pad" />;
-                        const iso   = toDateStr(d);
-                        const count = dataMap[iso]?.sessionCount ?? 0;
-                        const isToday = iso === todayStr;
-                        return (
-                          <div
-                            key={iso}
-                            className={`hm-cell ${getColorClass(count)}`}
-                            style={isToday ? { outline: '1px solid #7F77DD', outlineOffset: '1px' } : undefined}
-                            onMouseEnter={e => handleMouseEnter(e, iso)}
-                            onMouseLeave={handleMouseLeave}
-                            aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
+                      onMouseEnter={e => handleMouseEnter(e, iso)}
+                      onMouseLeave={handleMouseLeave}
+                      aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
+                    />
+                  );
+                })}
               </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Fixed right info panel */}
         <div style={{
           width: 160,
           flexShrink: 0,
@@ -215,7 +209,6 @@ const MonthlyHeatmap = () => {
           borderRadius: 10,
           padding: '12px 14px',
           minHeight: 90,
-          marginRight: 100,
         }}>
           {tooltip.visible ? (
             <>
@@ -229,7 +222,7 @@ const MonthlyHeatmap = () => {
                     <span>Duration</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatDuration(tooltip.data.totalDuration)}</span>
                   </p>
                   <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Focus score</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatFocus(tooltip.data.avgFocus)}</span>
+                    <span>Focus</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatFocus(tooltip.data.avgFocus)}</span>
                   </p>
                 </>
               ) : (
@@ -242,7 +235,6 @@ const MonthlyHeatmap = () => {
         </div>
       </div>
 
-      {/* Legend */}
       <div className="hm-legend">
         <span className="hm-legend-label">Less</span>
         <div className="hm-cell hm-cell--empty hm-legend-cell" />

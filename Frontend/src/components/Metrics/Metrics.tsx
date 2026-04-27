@@ -16,27 +16,10 @@ interface FocusResponse {
   data: FocusDataPoint[];
 }
 
-interface WeeklyResponse {
-  success: boolean;
-  data: DayMetric[];
-}
-
-
 Chart.register(...registerables);
 
 type Range  = '7D' | '1M' | '1Y';
 type Metric = 'focus' | 'time' | 'sessions';
-
-interface DayMetric {
-  focus: number;
-  eye: number;
-  deep: number;
-  duration: string;
-  distractions: number;
-}
-
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const DAY_NAMES  = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function getLabels(range: Range): string[] {
   if (range === '7D') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -58,181 +41,19 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function drawDiamond(canvas: HTMLCanvasElement, focus: number, eye: number, deep: number) {
-  const ctx = canvas.getContext('2d')!;
-  const W = canvas.width;
-  const H = canvas.height;
-  const cx = W / 2;
-  const cy = H / 2;
-  const R = 88;
-  ctx.clearRect(0, 0, W, H);
-
-  const accent  = cssVar('--color-accent')     || '#646cff';
-  const success = cssVar('--color-success')    || '#22c55e';
-  const danger  = cssVar('--color-danger')     || '#ef4444';
-  const border  = cssVar('--color-border')     || '#404040';
-  const muted   = cssVar('--color-text-muted') || '#6b7280';
-  const bg      = cssVar('--color-bg-elevated')|| '#242424';
-
-  const pts4 = (r: number): [number, number][] => [
-    [cx      , cy - R * r],
-    [cx + R*r, cy        ],
-    [cx      , cy + R * r],
-    [cx - R*r, cy        ],
-  ];
-
-  [0.25, 0.5, 0.75, 1].forEach(r => {
-    const p = pts4(r);
-    ctx.beginPath();
-    ctx.moveTo(p[0][0], p[0][1]);
-    p.forEach(pt => ctx.lineTo(pt[0], pt[1]));
-    ctx.closePath();
-    ctx.strokeStyle = border;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  });
-
-  pts4(1).forEach(pt => {
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(pt[0], pt[1]);
-    ctx.strokeStyle = border;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  });
-
-  const f = focus / 100;
-  const e = eye / 100;
-  const d = deep / 100;
-  const poly: [number, number][] = [
-    [cx                    , cy - R * f],
-    [cx + R * e            , cy        ],
-    [cx                    , cy + R * d],
-    [cx - R * ((f+e+d) / 3), cy        ],
-  ];
-
-  ctx.beginPath();
-  ctx.moveTo(poly[0][0], poly[0][1]);
-  poly.forEach(pt => ctx.lineTo(pt[0], pt[1]));
-  ctx.closePath();
-  ctx.fillStyle = accent + '30';
-  ctx.fill();
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  [accent, success, danger, accent].forEach((col, i) => {
-    ctx.beginPath();
-    ctx.arc(poly[i][0], poly[i][1], 5, 0, Math.PI * 2);
-    ctx.fillStyle = col;
-    ctx.fill();
-    ctx.strokeStyle = bg;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  });
-
-  ctx.font = '11px system-ui, sans-serif';
-  ctx.fillStyle = muted;
-  ctx.textAlign = 'center';
-  ctx.fillText('Focus', cx,          cy - R - 10);
-  ctx.fillText('Eye',   cx + R + 14, cy + 4);
-  ctx.fillText('Deep',  cx,          cy + R + 16);
-}
-
-function DiamondWheel({ weekData }: { weekData: DayMetric[] }) {
-  const todayIndex = (new Date().getDay() + 6) % 7; 
-  const [selected, setSelected] = useState(todayIndex);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const d = weekData[selected];
-
-  useEffect(() => {
-    if (canvasRef.current && d) {
-      drawDiamond(canvasRef.current, d.focus, d.eye, d.deep);
-    }
-  }, [selected, d]);
-
-  if (!d) return null;
-
-  return (
-    <div className="metrics-card">
-      <div className="metrics-card-header">
-        <div>
-          <p className="metrics-section-label">Sessions</p>
-          <h3 className="metrics-card-title">User sessions</h3>
-        </div>
-        <span className="metrics-day-name">{DAY_NAMES[selected]}</span>
-      </div>
-
-      <div className="metrics-wheel-body">
-        <div className="metrics-wheel-canvas">
-          <canvas
-            ref={canvasRef}
-            width={240} height={240}
-            role="img"
-            aria-label="Diamond chart showing focus, eye contact, and deep focus"
-          />
-        </div>
-
-        <div className="metrics-wheel-bars">
-          {[
-            { label: 'Focus score', value: d.focus, cls: 'bar-purple' },
-            { label: 'Eye contact', value: d.eye,   cls: 'bar-teal'   },
-            { label: 'Deep focus',  value: d.deep,  cls: 'bar-pink'   },
-          ].map(({ label, value, cls }) => (
-            <div key={label} className="metrics-bar-row">
-              <span className="metrics-bar-label">{label}</span>
-              <div className="metrics-bar-track">
-                <div className={`metrics-bar-fill ${cls}`} style={{ width: `${value}%` }} />
-              </div>
-              <span className={`metrics-bar-value ${cls}`}>{value}</span>
-            </div>
-          ))}
-
-          <div className="metrics-wheel-stats">
-            <div>
-              <p className="metrics-stat-label">Duration</p>
-              <p className="metrics-stat-value">{d.duration}</p>
-            </div>
-            <div>
-              <p className="metrics-stat-label">Distractions</p>
-              <p className={`metrics-stat-value ${d.distractions > 8 ? 'text-danger' : ''}`}>
-                {d.distractions}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="metrics-day-tabs">
-        {DAY_LABELS.map((label, i) => (
-          <button
-            key={i}
-            className={`metrics-day-tab ${selected === i ? 'active' : ''}`}
-            onClick={() => setSelected(i)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const Metrics = () => {
   const { user } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
 
-  const [range, setRange]                   = useState<Range>('7D');
-  const [focusData, setFocusData]           = useState<number[]>([]);
-  const [durationData, setDurationData]     = useState<number[]>([]);
-  const [sessionData, setSessionData]       = useState<number[]>([]);
-  const [chartLabels, setChartLabels]       = useState<string[]>([]);
-  const [sessionCount, setSessionCount]     = useState<number | null>(null);
-  const [totalDuration, setTotalDuration]   = useState<number | null>(null);
-  const [loading, setLoading]               = useState(true);
-  const [weekData, setWeekData]             = useState<DayMetric[]>([]);
-
-  const [activeMetric, setActiveMetric] = useState<Metric>('focus');
+  const [range, setRange]                 = useState<Range>('7D');
+  const [focusData, setFocusData]         = useState<number[]>([]);
+  const [durationData, setDurationData]   = useState<number[]>([]);
+  const [sessionData, setSessionData]     = useState<number[]>([]);
+  const [chartLabels, setChartLabels]     = useState<string[]>([]);
+  const [sessionCount, setSessionCount]   = useState<number | null>(null);
+  const [totalDuration, setTotalDuration] = useState<number | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [activeMetric, setActiveMetric]   = useState<Metric>('focus');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
@@ -271,23 +92,6 @@ const Metrics = () => {
   }, [range, user]);
 
   useEffect(() => {
-    if (!user) return;
-    const fetchWeekData = async () => {
-      try {
-        const res = await fetch(
-          `${API_URL}/metrics/weekly-summary/${user.userId}`,
-          { credentials: 'include' }
-        );
-        const json: WeeklyResponse = await res.json();
-        if (json.success && json.data) setWeekData(json.data);
-      } catch (err) {
-        console.error('Failed to fetch weekly data:', err);
-      }
-    };
-    fetchWeekData();
-  }, [user]);
-
-  useEffect(() => {
     if (!canvasRef.current || focusData.length === 0) return;
     chartRef.current?.destroy();
 
@@ -300,9 +104,9 @@ const Metrics = () => {
     const blue     = '#3b82f6';
 
     const metricConfig = {
-      focus:    { data: focusData,    color: accent,  dash: [],     label: 'Avg Focus'   },
-      time:     { data: durationData, color: orange,  dash: [5, 3], label: 'Total Time'  },
-      sessions: { data: sessionData,  color: blue,    dash: [2, 4], label: 'Sessions'    },
+      focus:    { data: focusData,    color: accent,  dash: [],     label: 'Avg Focus'  },
+      time:     { data: durationData, color: orange,  dash: [5, 3], label: 'Total Time' },
+      sessions: { data: sessionData,  color: blue,    dash: [2, 4], label: 'Sessions'   },
     }[activeMetric];
 
     const rawMax = metricConfig.data.length > 0 ? Math.max(...metricConfig.data) : 100;
@@ -336,7 +140,7 @@ const Metrics = () => {
             callbacks: {
               label: (ctx: any) => {
                 const val = Math.round(ctx.raw as number);
-                if (activeMetric === 'focus')    return ` Avg Focus: ${val}/100`;
+                if (activeMetric === 'focus')    return ` Avg Focus: ${val}%`;
                 if (activeMetric === 'sessions') return ` Sessions: ${val}`;
                 const h = Math.floor(val / 60);
                 const m = val % 60;
@@ -387,8 +191,8 @@ const Metrics = () => {
           <div className="metrics-card-header">
             <div>
               <p className="metrics-section-label">
-              {range === '7D' ? '7 day review' : range === '1M' ? 'Monthly review' : 'Yearly review'}
-             </p>
+                {range === '7D' ? '7 day review' : range === '1M' ? 'Monthly review' : 'Yearly review'}
+              </p>
               <h3 className="metrics-card-title">Focus over time</h3>
             </div>
             <div className="metrics-range-toggle">
@@ -462,10 +266,9 @@ const Metrics = () => {
         </div>
       </div>
 
-      
       <div className="metrics-section">
         <MonthlyHeatmap />
-    </div>
+      </div>
     </div>
   );
 };
