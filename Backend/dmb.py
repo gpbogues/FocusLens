@@ -138,13 +138,15 @@ def focus_engine():
     face_mesh = _face_landmarker  # initialized in main thread at startup
 
     # Open camera — only happens during an active session
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    import platform
+    _backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
+    cap = cv2.VideoCapture(0, _backend)
     if not cap.isOpened():
         print("[ENGINE] Failed to open camera")
         return
     print("[ENGINE] Camera opened - warming up", flush=True)
     _warmup_start = time.time()
-    while time.time() - _warmup_start < 8.0:
+    while time.time() - _warmup_start < 3.0:
         _ok, _f = cap.read()
         if _ok and _f is not None and _f.mean() > 10:
             break

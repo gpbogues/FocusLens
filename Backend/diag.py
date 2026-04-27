@@ -17,7 +17,9 @@ print(f"  focus_rf_model.pkl : {'EXISTS' if os.path.exists(pkl) else 'MISSING'} 
 print(f"  face_landmarker.task: {'EXISTS' if os.path.exists(task) else 'MISSING'} -> {task}")
 
 print("\nCAMERA + FACE DETECTION")
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+import platform
+_backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
+cap = cv2.VideoCapture(0, _backend)
 if not cap.isOpened():
     print("  Camera failed to open"); sys.exit(1)
 
