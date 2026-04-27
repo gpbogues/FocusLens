@@ -229,7 +229,7 @@ const MonthlyHeatmap = () => {
                     <span>Duration</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatDuration(tooltip.data.totalDuration)}</span>
                   </p>
                   <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Avg Focus</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatFocus(tooltip.data.avgFocus)}</span>
+                    <span>Focus score</span><span style={{ color: '#7F77DD', fontWeight: 600 }}>{formatFocus(tooltip.data.avgFocus)}</span>
                   </p>
                 </>
               ) : (

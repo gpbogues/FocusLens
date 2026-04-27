@@ -127,59 +127,11 @@
   pointer-events: none;
 }
 
-.hm-cell--empty { background-color: #1e1e2e; }
-.hm-cell--l1    { background-color: #3b1f6e; }
-.hm-cell--l2    { background-color: #5a2fa0; }
-.hm-cell--l3    { background-color: #7F77DD; }
-.hm-cell--l4    { background-color: #AFA9EC; }
-
-/* Light theme overrides — lighter purple scale */
-[data-theme="light"] .hm-cell--empty,
-[data-theme="sunset"] .hm-cell--empty,
-[data-theme="rose"] .hm-cell--empty,
-[data-theme="hydrangea"] .hm-cell--empty,
-[data-theme="pistachio"] .hm-cell--empty,
-[data-theme="softspring"] .hm-cell--empty { background-color: #edeeff; }
-
-[data-theme="light"] .hm-cell--l1,
-[data-theme="sunset"] .hm-cell--l1,
-[data-theme="rose"] .hm-cell--l1,
-[data-theme="hydrangea"] .hm-cell--l1,
-[data-theme="pistachio"] .hm-cell--l1,
-[data-theme="softspring"] .hm-cell--l1 { background-color: #CECBF6; }
-
-[data-theme="light"] .hm-cell--l2,
-[data-theme="sunset"] .hm-cell--l2,
-[data-theme="rose"] .hm-cell--l2,
-[data-theme="hydrangea"] .hm-cell--l2,
-[data-theme="pistachio"] .hm-cell--l2,
-[data-theme="softspring"] .hm-cell--l2 { background-color: #AFA9EC; }
-
-[data-theme="light"] .hm-cell--l3,
-[data-theme="sunset"] .hm-cell--l3,
-[data-theme="rose"] .hm-cell--l3,
-[data-theme="hydrangea"] .hm-cell--l3,
-[data-theme="pistachio"] .hm-cell--l3,
-[data-theme="softspring"] .hm-cell--l3 { background-color: #7F77DD; }
-
-[data-theme="light"] .hm-cell--l4,
-[data-theme="sunset"] .hm-cell--l4,
-[data-theme="rose"] .hm-cell--l4,
-[data-theme="hydrangea"] .hm-cell--l4,
-[data-theme="pistachio"] .hm-cell--l4,
-[data-theme="softspring"] .hm-cell--l4 { background-color: #534AB7; }
-
-/* Dark wrapper bg for dark themes */
-[data-theme="dark"] .hm-wrapper,
-[data-theme="stormy"] .hm-wrapper { background-color: var(--color-bg-elevated); }
-
-/* Light wrapper bg for light themes */
-[data-theme="light"] .hm-wrapper,
-[data-theme="sunset"] .hm-wrapper,
-[data-theme="rose"] .hm-wrapper,
-[data-theme="hydrangea"] .hm-wrapper,
-[data-theme="pistachio"] .hm-wrapper,
-[data-theme="softspring"] .hm-wrapper { background-color: var(--color-bg-elevated); }
+.hm-cell--empty { background-color: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-surface)); }
+.hm-cell--l1    { background-color: color-mix(in srgb, var(--color-accent) 25%, var(--color-bg-surface)); }
+.hm-cell--l2    { background-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-bg-surface)); }
+.hm-cell--l3    { background-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-bg-surface)); }
+.hm-cell--l4    { background-color: var(--color-accent); }
 
 .hm-cell:not(.hm-cell--pad):hover {
   opacity: 0.75;
