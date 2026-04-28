@@ -76,6 +76,7 @@ const Metrics = () => {
   const [customStart,   setCustomStart]   = useState<string | null>(null);
   const [customEnd,     setCustomEnd]     = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
+  const [csvConfirm, setCsvConfirm] = useState(false);
   const [pickStep,      setPickStep]      = useState<'start' | 'end'>('start');
   const [calYear,       setCalYear]       = useState(() => new Date().getFullYear());
   const [calMonth,      setCalMonth]      = useState(() => new Date().getMonth());
@@ -340,6 +341,22 @@ const Metrics = () => {
     });
   }
 
+  function downloadCSV() {
+    if (!chartLabels.length) return;
+    const rows = [['Date', 'Avg Focus (%)', 'Total Time (min)', 'Sessions']];
+    chartLabels.forEach((date, i) => {
+      rows.push([date, String(focusData[i] ?? ''), String(durationData[i] ?? ''), String(sessionData[i] ?? '')]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `focuslens-metrics-${range === 'custom' ? `${customStart}_${customEnd}` : range}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const sectionLabel =
     range === '7D'    ? '7 day review'
     : range === '1M'  ? 'Monthly review'
@@ -378,6 +395,14 @@ const Metrics = () => {
                 {range === 'custom' && customStart && customEnd
                   ? `${fmtShort(customStart)} – ${fmtShort(customEnd)}`
                   : 'Custom'}
+              </button>
+              <button
+                className="metrics-range-btn metrics-csv-btn"
+                onClick={() => chartLabels.length && setCsvConfirm(true)}
+                disabled={!chartLabels.length}
+                title="Download as CSV"
+              >
+                CSV
               </button>
             </div>
           </div>
@@ -443,6 +468,20 @@ const Metrics = () => {
       <div className="metrics-section">
         <MonthlyHeatmap />
       </div>
+
+      {/* CSV Download Confirmation */}
+      {csvConfirm && (
+        <div className="modal-overlay" onClick={() => setCsvConfirm(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <p className="modal-title">Download CSV</p>
+            <p className="modal-subtitle">Export {chartLabels.length} row{chartLabels.length !== 1 ? 's' : ''} of metrics data for the {sectionLabel}?</p>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setCsvConfirm(false)}>Cancel</button>
+              <button className="modal-save" onClick={() => { downloadCSV(); setCsvConfirm(false); }}>Download</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Custom Date Range Modal */}
       {showDateModal && (

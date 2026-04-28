@@ -89,6 +89,15 @@
   color: var(--color-text-primary);
 }
 
+.metrics-csv-btn {
+  margin-left: 6px;
+}
+
+.metrics-csv-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .metrics-stat-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
