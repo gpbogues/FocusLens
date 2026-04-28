@@ -1,20 +1,22 @@
 """
-Prerequisites (from repo root, venv activated):
-    pip install bcrypt
-    python scripts/seed_test_account.py
+Prerequisites (from repo root, local venv activated):
+    pip install -r requirements.txt
+    python3 scripts/seed_test_account.py
+
+Step 1, create the demo user on EC2 (one-time, printed at startup if needed).
+Step 2, script seeds sessions, chunks, folders, and AI feedback via the API.
 """
 
 import os
 import sys
 import math
 import random
-import sqlite3
 import time
 from datetime import datetime, timedelta
 
 import numpy as np
+import requests as _http
 
-# path setup
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT  = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 sys.path.insert(0, REPO_ROOT)
@@ -27,7 +29,7 @@ except ImportError:
 
 from rag.feedback_generator import generate_feedback
 
-# config 
+#  config ─
 SEED_EMAIL    = "aalthou@okstate.edu"
 SEED_PASSWORD = "Test123!"
 SEED_USERNAME = "Asaad Althoubi"
@@ -35,17 +37,9 @@ SEED_USERNAME = "Asaad Althoubi"
 START_DATE = datetime(2025, 4, 27)
 END_DATE   = datetime(2026, 4, 26)
 
-DB_DEFAULT = os.path.join(REPO_ROOT, "Backend", "Database_backend", "focuslens.db")
-DB_PATH    = os.environ.get("DB_PATH", DB_DEFAULT)
+API_BASE = os.environ.get("API_BASE", "http://100.27.212.225:5000")
 
-# focus archetypes 
-# Biometric ranges align with feedback_generator.py thresholds:
-#   avg_ear   < 0.012 → eye fatigue
-#   avg_head_yaw > 0.09 → head movement
-#   avg_head_pitch < 0.18 → head tilt
-#   avg_mar   > 0.020 → yawning
-#   avg_eyebrow < 0.028 → brow tension
-# Per-frame distraction (dmb.py:270): ear<0.012 OR yaw>0.09 OR pitch<0.18
+#  focus archetypes
 ARCHETYPES = {
     "High Focus": {
         "weight": 0.25,
@@ -131,68 +125,56 @@ SESSION_DESCRIPTIONS = [
     "Pre-exam preparation.",
 ]
 
-# focus score helpers
+# focus score helpers 
 
 def _compute_avg_focus_feedback(counts: dict) -> float:
-    """Mirror of dmb.py:40-46 — 0-100 scale, used for generate_feedback()."""
     SCORES = {"VF": 100, "SF": 66, "SU": 33, "VU": 0}
     total = sum(counts.values())
-    if total == 0:
-        return 0.0
-    return sum(SCORES[k] * v for k, v in counts.items()) / total
+    return sum(SCORES[k] * v for k, v in counts.items()) / total if total else 0.0
 
 
-def _compute_avg_focus_db(counts: dict) -> float:
-    """Mirror of server.js:324-327 — 0-3 scale, stored in UserSession.avgFocus."""
-    SCORES = {"VF": 3, "SF": 2, "SU": 1, "VU": 0}
-    total = sum(counts.values())
-    if total == 0:
-        return 0.0
-    return sum(SCORES[k] * v for k, v in counts.items()) / total
+def _infer_archetype(avg_focus_db: float) -> str:
+    if avg_focus_db >= 2.4: return "High Focus"
+    if avg_focus_db >= 1.8: return "Solid"
+    if avg_focus_db >= 1.2: return "Mixed"
+    if avg_focus_db >= 0.5: return "Struggling"
+    return "Very Bad"
 
-# synthetic frame generation 
+# synthetic frame generation
 
 def _generate_frames(archetype: str, n: int) -> np.ndarray:
-    """Return (n, 5) array: [ear, yaw, pitch, mar, eyebrow] per synthetic frame."""
     bio = ARCHETYPES[archetype]["bio"]
-    cols = [
+    return np.column_stack([
         np.random.uniform(*bio["ear"],     n),
         np.random.uniform(*bio["yaw"],     n),
         np.random.uniform(*bio["pitch"],   n),
         np.random.uniform(*bio["mar"],     n),
         np.random.uniform(*bio["eyebrow"], n),
-    ]
-    return np.column_stack(cols)
+    ])
 
 
 def build_stats(archetype: str, chunk_dist: dict, active_secs: int) -> dict:
-    """Build _session_last_stats dict matching dmb.py:300-312 exactly."""
     n   = max(500, active_secs * 2)
     arr = _generate_frames(archetype, n)
-
-    # Per-frame distraction: dmb.py:270 — ear<0.012 OR yaw>0.09 OR pitch<0.18
-    distracted       = (arr[:, 0] < 0.012) | (arr[:, 1] > 0.09) | (arr[:, 2] < 0.18)
+    distracted        = (arr[:, 0] < 0.012) | (arr[:, 1] > 0.09) | (arr[:, 2] < 0.18)
     distraction_ratio = float(np.sum(distracted)) / n * 100.0
-
     return {
-        "avg_ear":                float(np.mean(arr[:, 0])),
-        "avg_head_yaw":           float(np.mean(arr[:, 1])),
-        "avg_head_pitch":         float(np.mean(arr[:, 2])),
-        "avg_mar":                float(np.mean(arr[:, 3])),
-        "avg_eyebrow":            float(np.mean(arr[:, 4])),
-        "distraction_ratio":      distraction_ratio,
-        "chunk_distribution":     dict(chunk_dist),
-        "avg_focus_score":        _compute_avg_focus_feedback(chunk_dist),
+        "avg_ear":                 float(np.mean(arr[:, 0])),
+        "avg_head_yaw":            float(np.mean(arr[:, 1])),
+        "avg_head_pitch":          float(np.mean(arr[:, 2])),
+        "avg_mar":                 float(np.mean(arr[:, 3])),
+        "avg_eyebrow":             float(np.mean(arr[:, 4])),
+        "distraction_ratio":       distraction_ratio,
+        "chunk_distribution":      dict(chunk_dist),
+        "avg_focus_score":         _compute_avg_focus_feedback(chunk_dist),
         "active_duration_minutes": active_secs / 60.0,
     }
 
-# schedule generation 
+#  schedule helpers
 
 def _generate_schedule(target: int = 100) -> list:
-    """Return list of datetime objects (session start dates), sorted ascending."""
-    weeks = 52
-    week_indices = list(range(weeks))
-
+    weeks          = 52
+    week_indices   = list(range(weeks))
     vacation_weeks = set(random.sample(week_indices, 6))
     crunch_pool    = [w for w in week_indices if w not in vacation_weeks]
     crunch_weeks   = set(random.sample(crunch_pool, 8))
@@ -206,7 +188,6 @@ def _generate_schedule(target: int = 100) -> list:
         else:
             counts.append(random.randint(1, 3))
 
-    # Nudge toward target
     while sum(counts) > target + 5:
         eligible = [i for i, v in enumerate(counts) if v > 1 and i not in crunch_weeks and i not in vacation_weeks]
         if not eligible:
@@ -219,243 +200,102 @@ def _generate_schedule(target: int = 100) -> list:
         counts[random.choice(eligible)] += 1
 
     dates = []
-    for week_i, n in enumerate(counts):
-        week_start = START_DATE + timedelta(weeks=week_i)
-        day_pool = list(range(7))
-        random.shuffle(day_pool)
-        for offset in day_pool[:n]:
-            d = week_start + timedelta(days=offset)
-            if d > END_DATE:
-                continue
-            dates.append(d)
-
+    for w, n in enumerate(counts):
+        week_start = START_DATE + timedelta(weeks=w)
+        days = random.sample(range(7), min(n, 7))
+        for d in days:
+            dates.append(week_start + timedelta(days=d))
     dates.sort()
     return dates
 
 
+def _pick_archetype() -> str:
+    names   = list(ARCHETYPES.keys())
+    weights = [ARCHETYPES[a]["weight"] for a in names]
+    return random.choices(names, weights=weights, k=1)[0]
+
+
+def _pick_duration() -> int:
+    if random.random() < 0.45:
+        return int(random.gauss(25 * 60, 7 * 60))
+    return int(random.gauss(75 * 60, 20 * 60))
+
+
 def _pick_hour() -> int:
-    """Weighted hour: peaks at 9-11 AM and 7-10 PM."""
     pool = (
-        list(range(9, 12)) * 4 +
-        list(range(12, 15)) * 2 +
-        list(range(15, 18)) * 1 +
-        list(range(19, 23)) * 4 +
-        list(range(7,  9))  * 2
+        list(range(9, 12)) * 3 +
+        list(range(19, 23)) * 3 +
+        list(range(7, 9))   * 1 +
+        list(range(12, 19)) * 1 +
+        [23]
     )
     return random.choice(pool)
 
 
-def _pick_duration() -> int:
-    """Bimodal: short ~25 min or long ~75 min, clamped to 10-120 min."""
-    mins = random.gauss(25, 8) if random.random() < 0.55 else random.gauss(75, 20)
-    return int(max(10, min(120, mins)) * 60)
-
-
-def _pick_archetype() -> str:
-    names   = list(ARCHETYPES.keys())
-    weights = [ARCHETYPES[n]["weight"] for n in names]
-    return random.choices(names, weights=weights, k=1)[0]
-
-
 def _gen_chunks(archetype: str, n: int) -> tuple:
-    """Returns (counts dict, ordered label list)."""
     weights = ARCHETYPES[archetype]["chunk_weights"]
     labels  = list(weights.keys())
     probs   = list(weights.values())
     ordered = random.choices(labels, weights=probs, k=n)
-    counts  = {"VF": 0, "SF": 0, "SU": 0, "VU": 0}
+    dist    = {"VF": 0, "SF": 0, "SU": 0, "VU": 0}
     for lbl in ordered:
-        counts[lbl] += 1
-    return counts, ordered
+        dist[lbl] += 1
+    return dist, ordered
 
-# database helpers 
 
 def _fmt(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
+#  API helpers 
 
-def init_schema(conn: sqlite3.Connection):
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS UserData (
-            UserID        INTEGER PRIMARY KEY AUTOINCREMENT,
-            uEmail        TEXT NOT NULL UNIQUE,
-            uName         TEXT NOT NULL,
-            uPassword     TEXT NOT NULL,
-            verified      INTEGER NOT NULL DEFAULT 0,
-            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-            avatarUrl     TEXT NULL DEFAULT NULL,
-            cameraEnabled INTEGER,
-            micEnabled    INTEGER,
-            avatarId      TEXT,
-            theme         TEXT NOT NULL DEFAULT 'dark'
-        );
-        CREATE TABLE IF NOT EXISTS UserSession (
-            SessionID          INTEGER PRIMARY KEY AUTOINCREMENT,
-            UserID             INTEGER NOT NULL,
-            sessionStart       TEXT NOT NULL DEFAULT (datetime('now')),
-            sessionEnd         TEXT NOT NULL DEFAULT (datetime('now')),
-            activeDuration     INTEGER NOT NULL DEFAULT 0,
-            avgFocus           REAL NOT NULL,
-            sessionName        TEXT NOT NULL DEFAULT '',
-            sessionDescription TEXT NULL,
-            sessionFeedback    TEXT NULL,
-            FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS SessionChunk (
-            ChunkId     INTEGER PRIMARY KEY AUTOINCREMENT,
-            SessionID   INTEGER NOT NULL,
-            UserID      INTEGER NOT NULL,
-            endOfChunk  TEXT NOT NULL DEFAULT (datetime('now')),
-            chunkStatus TEXT CHECK(chunkStatus IN ('VF', 'SF', 'VU', 'SU')),
-            FOREIGN KEY (SessionID) REFERENCES UserSession(SessionID) ON DELETE CASCADE,
-            FOREIGN KEY (UserID)    REFERENCES UserData(UserID)       ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS SessionFolder (
-            FolderID          INTEGER PRIMARY KEY AUTOINCREMENT,
-            UserID            INTEGER NOT NULL,
-            folderName        TEXT NOT NULL,
-            folderDescription TEXT NULL,
-            createdAt         TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (UserID) REFERENCES UserData(UserID) ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS SessionFolderMap (
-            FolderID  INTEGER NOT NULL,
-            SessionID INTEGER NOT NULL,
-            PRIMARY KEY (FolderID, SessionID),
-            FOREIGN KEY (FolderID)  REFERENCES SessionFolder(FolderID)  ON DELETE CASCADE,
-            FOREIGN KEY (SessionID) REFERENCES UserSession(SessionID)   ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_usersession_userid_start      ON UserSession(UserID, sessionStart DESC);
-        CREATE INDEX IF NOT EXISTS idx_usersession_userid_duration   ON UserSession(UserID, activeDuration DESC);
-        CREATE INDEX IF NOT EXISTS idx_usersession_userid_focus      ON UserSession(UserID, avgFocus DESC);
-        CREATE INDEX IF NOT EXISTS idx_sessionchunk_sessionid        ON SessionChunk(SessionID);
-        CREATE INDEX IF NOT EXISTS idx_sessionchunk_userid           ON SessionChunk(UserID);
-        CREATE INDEX IF NOT EXISTS idx_usersession_userid_lower_name ON UserSession(UserID, LOWER(sessionName));
-        CREATE INDEX IF NOT EXISTS idx_sessionfoldermap_sessionid    ON SessionFolderMap(SessionID);
-    """)
-    conn.commit()
+def _api(method: str, path: str, **kwargs):
+    resp = getattr(_http, method)(f"{API_BASE}{path}", timeout=30, **kwargs)
+    resp.raise_for_status()
+    return resp.json()
 
+# user creation 
 
-def upsert_user(conn: sqlite3.Connection) -> int:
-    row = conn.execute("SELECT UserID FROM UserData WHERE uEmail = ?", (SEED_EMAIL,)).fetchone()
-    if row:
-        print(f"  User already exists — reusing UserID={row[0]}")
-        return row[0]
+def ensure_user() -> int:
+    """
+    If SEED_USER_ID env var is set, use it directly.
+    Otherwise generate the bcrypt hash locally, print the one-time SSH sqlite3
+    command to create the user on EC2, and prompt for the assigned UserID.
+    """
+    uid_env = os.environ.get("SEED_USER_ID", "").strip()
+    if uid_env:
+        print(f"  Using SEED_USER_ID={uid_env}")
+        return int(uid_env)
+
+    # Check if user already exists by trying a known-safe query via a session count
+    # (no "get user by email" endpoint without auth — we rely on the caller knowing the ID)
     pw_hash = _bcrypt.hashpw(SEED_PASSWORD.encode(), _bcrypt.gensalt(rounds=12)).decode()
-    cur = conn.execute(
-        "INSERT INTO UserData (uEmail, uName, uPassword, verified, theme) VALUES (?, ?, ?, 1, 'dark')",
-        (SEED_EMAIL, SEED_USERNAME, pw_hash),
-    )
-    conn.commit()
-    print(f"  Created: {SEED_EMAIL}  (UserID={cur.lastrowid})")
-    return cur.lastrowid
+    safe_hash = pw_hash.replace("'", "''")  # SQL-escape for sqlite3 shell
 
-# main seed steps 
+    print()
+    print("  ACTION REQUIRED ┐")
+    print("  Run these two commands in a separate terminal to create the user:  ")
+    print()
+    print("  # 1. Insert user (run on EC2):")
+    print(f"  ssh ubuntu@ec2-100-27-212-225.compute-1.amazonaws.com \\")
+    print(f'    "sqlite3 ~/FocusLens/Backend/Database_backend/focuslens.db \\')
+    print(f"    \\\"INSERT OR IGNORE INTO UserData (uEmail, uName, uPassword, verified, theme) \\")
+    print(f"    VALUES ('{SEED_EMAIL}', '{SEED_USERNAME}', '{safe_hash}', 1, 'dark')\\\"\"")
+    print()
+    print("  # 2. Get the assigned UserID:")
+    print(f"  ssh ubuntu@ec2-100-27-212-225.compute-1.amazonaws.com \\")
+    print(f"    \"sqlite3 ~/FocusLens/Backend/Database_backend/focuslens.db \\")
+    print(f"    \\\"SELECT UserID FROM UserData WHERE uEmail='{SEED_EMAIL}'\\\"\"")
+    print()
 
-def seed_sessions(conn: sqlite3.Connection, user_id: int) -> list:
-    dates = _generate_schedule(target=100)
-    print(f"  Generated {len(dates)} session slots.\n")
-    records = []
+    uid = input("  Enter the UserID from step 2: ").strip()
+    if not uid.isdigit():
+        print("ERROR: UserID must be a number.")
+        sys.exit(1)
+    return int(uid)
 
-    for i, date in enumerate(dates):
-        archetype    = _pick_archetype()
-        duration     = _pick_duration()
-        hour         = _pick_hour()
-        start        = date.replace(hour=hour, minute=random.randint(0, 59), second=random.randint(0, 59))
-        active_secs  = int(duration * random.uniform(0.90, 1.00))
-        end          = start + timedelta(seconds=duration)
-        name         = random.choice(SESSION_NAMES)
-        description  = random.choice(SESSION_DESCRIPTIONS) if random.random() < 0.40 else None
-
-        cur = conn.execute(
-            "INSERT INTO UserSession "
-            "(UserID, sessionStart, sessionEnd, activeDuration, avgFocus, sessionName, sessionDescription) "
-            "VALUES (?, ?, ?, ?, 0, ?, ?)",
-            (user_id, _fmt(start), _fmt(end), active_secs, name, description),
-        )
-        session_id = cur.lastrowid
-
-        n_chunks              = max(1, math.ceil(active_secs / 300))
-        chunk_dist, ordered   = _gen_chunks(archetype, n_chunks)
-
-        for c_i, label in enumerate(ordered):
-            chunk_end = start + timedelta(seconds=300 * (c_i + 1))
-            conn.execute(
-                "INSERT INTO SessionChunk (SessionID, UserID, endOfChunk, chunkStatus) VALUES (?, ?, ?, ?)",
-                (session_id, user_id, _fmt(chunk_end), label),
-            )
-
-        avg_focus_db = _compute_avg_focus_db(chunk_dist)
-        conn.execute("UPDATE UserSession SET avgFocus = ? WHERE SessionID = ?", (avg_focus_db, session_id))
-        conn.commit()
-
-        records.append({
-            "session_id":    session_id,
-            "session_start": start,
-            "archetype":     archetype,
-            "active_secs":   active_secs,
-            "name":          name,
-            "chunk_dist":    chunk_dist,
-        })
-        print(f"  [{i+1:3}/{len(dates)}] {_fmt(start)} | {name:<33} | {active_secs//60:3}min | {archetype}")
-
-    return records
-
-
-def _infer_archetype(avg_focus_db: float) -> str:
-    """Map a stored 0-3 avgFocus back to the closest archetype for biometric generation."""
-    if avg_focus_db >= 2.4: return "High Focus"
-    if avg_focus_db >= 1.8: return "Solid"
-    if avg_focus_db >= 1.2: return "Mixed"
-    if avg_focus_db >= 0.5: return "Struggling"
-    return "Very Bad"
-
-
-def load_pending_sessions(conn: sqlite3.Connection, user_id: int) -> list:
-    """
-    Load sessions that are missing AI feedback from the DB.
-    Reconstructs the data shape seed_feedback() expects by reading chunks.
-    """
-    rows = conn.execute(
-        "SELECT SessionID, avgFocus, activeDuration, sessionStart FROM UserSession "
-        "WHERE UserID = ? AND (sessionFeedback IS NULL OR sessionFeedback = '') "
-        "ORDER BY sessionStart ASC",
-        (user_id,),
-    ).fetchall()
-
-    if not rows:
-        return []
-
-    pending = []
-    for session_id, avg_focus_db, active_secs, session_start_str in rows:
-        chunk_rows = conn.execute(
-            "SELECT chunkStatus FROM SessionChunk WHERE SessionID = ?",
-            (session_id,),
-        ).fetchall()
-        chunk_dist = {"VF": 0, "SF": 0, "SU": 0, "VU": 0}
-        for (status,) in chunk_rows:
-            if status in chunk_dist:
-                chunk_dist[status] += 1
-
-        try:
-            session_start = datetime.strptime(session_start_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            session_start = datetime.now()
-
-        pending.append({
-            "session_id":    session_id,
-            "session_start": session_start,
-            "archetype":     _infer_archetype(avg_focus_db or 0),
-            "active_secs":   active_secs or 600,
-            "name":          "",
-            "chunk_dist":    chunk_dist,
-        })
-
-    return pending
-
+# retry wrapper 
 
 def _call_with_retry(stats: dict, max_retries: int = 5, base_wait: int = 30):
-    """Call generate_feedback with exponential backoff on rate-limit errors."""
     for attempt in range(max_retries):
         try:
             return generate_feedback(**stats)
@@ -468,35 +308,152 @@ def _call_with_retry(stats: dict, max_retries: int = 5, base_wait: int = 30):
             else:
                 raise
 
+#  session seeding 
 
-def seed_feedback(conn: sqlite3.Connection, sessions: list) -> tuple:
+def seed_sessions(user_id: int) -> list:
+    dates = _generate_schedule(target=100)
+    print(f"  Generated {len(dates)} session slots.\n")
+    records = []
+
+    for i, date in enumerate(dates):
+        archetype   = _pick_archetype()
+        duration    = max(600, _pick_duration())
+        hour        = _pick_hour()
+        start       = date.replace(hour=hour, minute=random.randint(0, 59), second=random.randint(0, 59))
+        active_secs = int(duration * random.uniform(0.90, 1.00))
+        end         = start + timedelta(seconds=duration)
+        name        = random.choice(SESSION_NAMES)
+        description = random.choice(SESSION_DESCRIPTIONS) if random.random() < 0.40 else None
+
+        # Start session row with historical timestamp
+        r          = _api("post", "/session/start", json={"userId": user_id, "sessionStart": _fmt(start)})
+        session_id = r["sessionId"]
+
+        # Insert chunks
+        n_chunks           = max(1, math.ceil(active_secs / 300))
+        chunk_dist, ordered = _gen_chunks(archetype, n_chunks)
+        for label in ordered:
+            _api("post", "/session/chunk", json={"sessionId": session_id, "userId": user_id, "chunkStatus": label})
+
+        # Generate AI feedback locally
+        stats     = build_stats(archetype, chunk_dist, active_secs)
+        feedback  = None
+        fb_status = "SKIP (no key)"
+        try:
+            feedback  = _call_with_retry(stats)
+            fb_status = "OK" if feedback else "SKIP (no key)"
+        except Exception as e:
+            fb_status = f"ERR ({type(e).__name__})"
+
+        # Finalize: PATCH computes avgFocus server-side from chunks
+        _api("patch", f"/sessions/{session_id}", json={
+            "sessionName":        name,
+            "sessionDescription": description,
+            "sessionEnd":         _fmt(end),
+            "activeDuration":     active_secs,
+            "sessionFeedback":    feedback,
+        })
+
+        records.append({
+            "session_id":    session_id,
+            "session_start": start,
+            "active_secs":   active_secs,
+            "name":          name,
+            "chunk_dist":    chunk_dist,
+            "archetype":     archetype,
+            "session_end":   _fmt(end),
+        })
+        print(f"  [{i+1:3}/{len(dates)}] {_fmt(start)} | {name:<33} | {active_secs//60:3}min | {archetype:<12} | fb: {fb_status}")
+        time.sleep(3)
+
+    return records
+
+# resume: find sessions with missing feedback 
+
+def load_pending_sessions(user_id: int) -> list:
+    """Fetch all sessions via API, return those with null/empty feedback."""
+    all_sessions = []
+    page = 1
+    while True:
+        r    = _api("get", f"/sessions/paginated/{user_id}?page={page}&limit=200")
+        rows = r.get("sessions", [])
+        all_sessions.extend(rows)
+        if len(all_sessions) >= r.get("total", 0) or not rows:
+            break
+        page += 1
+
+    pending = []
+    for s in all_sessions:
+        if s.get("sessionFeedback"):
+            continue
+        session_id = s["SessionID"]
+        try:
+            chunks_r   = _api("get", f"/sessions/{session_id}/chunks")
+            chunk_rows = chunks_r.get("data", [])
+        except Exception:
+            chunk_rows = []
+
+        chunk_dist = {"VF": 0, "SF": 0, "SU": 0, "VU": 0}
+        for c in chunk_rows:
+            status = c.get("chunkStatus", "")
+            if status in chunk_dist:
+                chunk_dist[status] += 1
+
+        try:
+            session_start = datetime.strptime(s["sessionStart"], "%Y-%m-%d %H:%M:%S")
+        except (ValueError, KeyError):
+            session_start = datetime.now()
+
+        pending.append({
+            "session_id":    session_id,
+            "session_start": session_start,
+            "session_end":   s.get("sessionEnd", _fmt(session_start + timedelta(hours=1))),
+            "active_secs":   s.get("activeDuration", 600),
+            "name":          s.get("sessionName", ""),
+            "chunk_dist":    chunk_dist,
+            "archetype":     _infer_archetype(s.get("avgFocus") or 0),
+        })
+
+    return pending
+
+
+def retry_feedback(sessions: list):
+    """Push feedback to sessions that are missing it."""
     ok = fail = 0
     for i, s in enumerate(sessions):
-        stats = build_stats(s["archetype"], s["chunk_dist"], s["active_secs"])
+        stats     = build_stats(s["archetype"], s["chunk_dist"], s["active_secs"])
+        feedback  = None
+        fb_status = "SKIP (no key)"
         try:
-            feedback = _call_with_retry(stats)
-            if feedback:
-                conn.execute(
-                    "UPDATE UserSession SET sessionFeedback = ? WHERE SessionID = ?",
-                    (feedback, s["session_id"]),
-                )
-                conn.commit()
-                ok += 1
-                status = "OK"
-            else:
-                fail += 1
-                status = "SKIP (GROQ_API_KEY not set)"
+            feedback  = _call_with_retry(stats)
+            fb_status = "OK" if feedback else "SKIP (no key)"
         except Exception as e:
             fail += 1
-            status = f"ERROR ({type(e).__name__}: {e})"
+            fb_status = f"ERR ({type(e).__name__})"
+            print(f"  [{i+1:3}/{len(sessions)}] SessionID={s['session_id']} | {fb_status}")
+            time.sleep(3)
+            continue
 
-        print(f"  [{i+1:3}/{len(sessions)}] SessionID={s['session_id']:4} | {status}")
+        if feedback:
+            _api("patch", f"/sessions/{s['session_id']}", json={
+                "sessionName":        s["name"],
+                "sessionDescription": None,
+                "sessionEnd":         s["session_end"],
+                "activeDuration":     s["active_secs"],
+                "sessionFeedback":    feedback,
+            })
+            ok += 1
+        else:
+            fail += 1
+
+        print(f"  [{i+1:3}/{len(sessions)}] SessionID={s['session_id']} | {fb_status}")
         time.sleep(3)
 
     return ok, fail
 
+#  folder seeding ─
 
-def seed_folders(conn: sqlite3.Connection, user_id: int, sessions: list):
+def seed_folders(user_id: int, sessions: list):
     study_kw = {"Review", "Prep", "Notes", "Reading", "Exam", "Problem",
                 "Lecture", "Lab", "Concept", "Revision", "Research"}
     folders = [
@@ -504,86 +461,78 @@ def seed_folders(conn: sqlite3.Connection, user_id: int, sessions: list):
         ("Deep Work",      "Long uninterrupted sessions over 45 minutes."),
         ("Morning Focus",  "Sessions started before 10 AM."),
     ]
-    folder_ids = {}
-    for name, desc in folders:
-        cur = conn.execute(
-            "INSERT INTO SessionFolder (UserID, folderName, folderDescription) VALUES (?, ?, ?)",
-            (user_id, name, desc),
-        )
-        folder_ids[name] = cur.lastrowid
+    for fname, fdesc in folders:
+        r         = _api("post", "/folders", json={"userId": user_id, "folderName": fname, "folderDescription": fdesc})
+        folder_id = r["folderId"]
+        count     = 0
+        for s in sessions:
+            matched = False
+            if fname == "Study Sessions" and any(kw in s["name"] for kw in study_kw):
+                matched = True
+            elif fname == "Deep Work" and s["active_secs"] > 45 * 60:
+                matched = True
+            elif fname == "Morning Focus" and s["session_start"].hour < 10:
+                matched = True
+            if matched:
+                _api("post", f"/folders/{folder_id}/sessions", json={"sessionId": s["session_id"]})
+                count += 1
+        print(f"  '{fname}': {count} sessions")
 
-    for s in sessions:
-        if any(kw in s["name"] for kw in study_kw):
-            conn.execute("INSERT OR IGNORE INTO SessionFolderMap VALUES (?, ?)",
-                         (folder_ids["Study Sessions"], s["session_id"]))
-        if s["active_secs"] > 45 * 60:
-            conn.execute("INSERT OR IGNORE INTO SessionFolderMap VALUES (?, ?)",
-                         (folder_ids["Deep Work"], s["session_id"]))
-        if s["session_start"].hour < 10:
-            conn.execute("INSERT OR IGNORE INTO SessionFolderMap VALUES (?, ?)",
-                         (folder_ids["Morning Focus"], s["session_id"]))
-
-    conn.commit()
-    for name, fid in folder_ids.items():
-        count = conn.execute(
-            "SELECT COUNT(*) FROM SessionFolderMap WHERE FolderID = ?", (fid,)
-        ).fetchone()[0]
-        print(f"  '{name}': {count} sessions")
-
-# entry point 
+#  entry point 
 
 def main():
-    print(f"DB: {DB_PATH}\n")
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
+    print(f"API: {API_BASE}\n")
 
-    print(" 1/4 Schema: ")
-    init_schema(conn)
-    print("  OK")
+    print("1/3  User:")
+    user_id = ensure_user()
 
-    print("\n 2/4 User: ")
-    user_id = upsert_user(conn)
-
-    print("\n 3/4 Sessions & chunks: ")
-    existing = conn.execute(
-        "SELECT COUNT(*) FROM UserSession WHERE UserID = ?", (user_id,)
-    ).fetchone()[0]
+    print("\n2/3  Sessions & chunks (+ AI feedback, ~3s each):")
+    try:
+        check    = _api("get", f"/sessions/paginated/{user_id}?page=1&limit=1")
+        existing = check.get("total", 0)
+    except Exception as e:
+        print(f"  WARNING: could not check existing sessions: {e}")
+        existing = 0
 
     if existing > 0:
-        print(f"  Found {existing} existing sessions — resuming feedback only.")
-        sessions      = None
-        pending       = load_pending_sessions(conn, user_id)
-        feedback_list = pending
-        print(f"  {len(pending)} session(s) missing feedback.\n")
+        print(f"  Found {existing} existing sessions — checking for missing feedback...")
+        pending = load_pending_sessions(user_id)
+        print(f"  {len(pending)} session(s) missing feedback.")
+        if pending:
+            ok, fail = retry_feedback(pending)
+            print(f"\n  Feedback retry: {ok}/{len(pending)} OK, {fail} skipped/failed.")
+        sessions = None
     else:
-        sessions      = seed_sessions(conn, user_id)
-        feedback_list = sessions
+        sessions = seed_sessions(user_id)
         print(f"\n  Inserted {len(sessions)} sessions.")
 
-    print("\n 4/4 AI Feedback (~3s per session): ")
-    if not feedback_list:
-        print("  Nothing to do — all sessions already have feedback.")
-        ok, fail = 0, 0
-    else:
-        ok, fail = seed_feedback(conn, feedback_list)
-    print(f"\n  Feedback: {ok}/{len(feedback_list)} OK, {fail} skipped/failed.")
+    print("\n3/3  Folders:")
+    try:
+        fr = _api("get", f"/folders/{user_id}")
+        if fr.get("folders"):
+            print(f"  Folders already exist ({len(fr['folders'])}) — skipping.")
+        else:
+            if sessions is None:
+                # Build minimal session list from pending for folder mapping
+                all_r    = _api("get", f"/sessions/paginated/{user_id}?page=1&limit=200")
+                sessions = [
+                    {
+                        "session_id":    s["SessionID"],
+                        "session_start": datetime.strptime(s["sessionStart"], "%Y-%m-%d %H:%M:%S"),
+                        "active_secs":   s.get("activeDuration", 0),
+                        "name":          s.get("sessionName", ""),
+                    }
+                    for s in all_r.get("sessions", [])
+                ]
+            seed_folders(user_id, sessions)
+    except Exception as e:
+        print(f"  WARNING: folder step failed: {e}")
 
-    print("\n 5/5 Folders: ")
-    folder_count = conn.execute(
-        "SELECT COUNT(*) FROM SessionFolder WHERE UserID = ?", (user_id,)
-    ).fetchone()[0]
-    if folder_count > 0:
-        print(f"  Folders already exist ({folder_count}) — skipping.")
-    else:
-        seed_folders(conn, user_id, sessions or load_pending_sessions(conn, user_id))
-
-    conn.close()
-    print(f"\n{'='*50}")
-    print(f"Done!  Log in as:  {SEED_EMAIL}")
+    print(f"\n{'='*52}")
+    print(f"Done!  Email:      {SEED_EMAIL}")
     print(f"       Password:   {SEED_PASSWORD}")
     print(f"       UserID:     {user_id}")
-    print(f"{'='*50}")
+    print(f"{'='*52}")
 
 
 if __name__ == "__main__":
