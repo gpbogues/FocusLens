@@ -21,7 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT  = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 sys.path.insert(0, REPO_ROOT)
 
-# Load rag/.env early so SEED_USER_ID and GROQ_API_KEY are available before any prompts
+# Load rag/.env early so SEED_USER_ID and GROQ_API_KEY are seen before any prompts
 _env_path = os.path.join(REPO_ROOT, "rag", ".env")
 if os.path.exists(_env_path):
     with open(_env_path) as _f:
@@ -39,7 +39,7 @@ except ImportError:
 
 from rag.feedback_generator import generate_feedback
 
-#  config ─
+# config 
 SEED_EMAIL    = "aalthou@okstate.edu"
 SEED_PASSWORD = "Test123!"
 SEED_USERNAME = "Asaad Althoubi"
@@ -49,7 +49,7 @@ END_DATE   = datetime(2026, 4, 26)
 
 API_BASE = os.environ.get("API_BASE", "http://100.27.212.225:5000")
 
-#  focus archetypes
+# focus archetypes
 ARCHETYPES = {
     "High Focus": {
         "weight": 0.25,
@@ -110,7 +110,7 @@ ARCHETYPES = {
 
 SESSION_NAMES = [
     "Chapter 3 Review", "Chapter 5 Review", "Chapter 8 Practice",
-    "Deep Work Session", "Morning Focus", "Evening Study",
+    "Work Session", "Morning Focus", "Evening Study",
     "Project Planning", "Research Session", "Literature Review",
     "Lecture Notes", "Problem Set #1", "Problem Set #4",
     "Midterm Prep", "Final Exam Review", "Reading Session",
@@ -134,6 +134,7 @@ SESSION_DESCRIPTIONS = [
     "Quick session to review notes.",
     "Pre-exam preparation.",
 ]
+
 
 # focus score helpers 
 
@@ -470,14 +471,14 @@ def retry_feedback(sessions: list):
 
     return ok, fail
 
-#  folder seeding ─
+# folder seeding 
 
 def seed_folders(user_id: int, sessions: list):
     study_kw = {"Review", "Prep", "Notes", "Reading", "Exam", "Problem",
                 "Lecture", "Lab", "Concept", "Revision", "Research"}
     folders = [
         ("Study Sessions", "Coursework, readings, and exam preparation sessions."),
-        ("Deep Work",      "Long uninterrupted sessions over 45 minutes."),
+        ("Work",      "Long uninterrupted sessions over 45 minutes."),
         ("Morning Focus",  "Sessions started before 10 AM."),
     ]
     for fname, fdesc in folders:
@@ -488,7 +489,7 @@ def seed_folders(user_id: int, sessions: list):
             matched = False
             if fname == "Study Sessions" and any(kw in s["name"] for kw in study_kw):
                 matched = True
-            elif fname == "Deep Work" and s["active_secs"] > 45 * 60:
+            elif fname == "Work" and s["active_secs"] > 45 * 60:
                 matched = True
             elif fname == "Morning Focus" and s["session_start"].hour < 10:
                 matched = True
@@ -497,7 +498,7 @@ def seed_folders(user_id: int, sessions: list):
                 count += 1
         print(f"  '{fname}': {count} sessions")
 
-# recent sessions (past 7 days boost)
+# recent sessions (past 7 days)
 
 def seed_recent_sessions(user_id: int) -> list:
     today   = datetime(2026, 4, 27)
