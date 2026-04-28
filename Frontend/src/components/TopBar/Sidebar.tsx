@@ -36,26 +36,17 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  //Slider motion values
-  // edgeX: x-position of the top-right and bottom-right corners.
-  //        0 = sidebar fully off-screen; SIDEBAR_W = fully open.
-  //        Also drives the panel's translateX so they stay in sync.
-  // ctrlX: x-position of the quadratic bezier control point (mid-right).
-  //        Leads edgeX when opening (bulges ahead), trails when closing.
   const edgeX = useMotionValue(0);
   const ctrlX = useMotionValue(0);
 
-  //panelX: offset so the content panel slides with the edge
   const panelX = useTransform(edgeX, (e) => e - SIDEBAR_W);
 
-  //Live SVG path,recomputed on every frame as the values change
   const d = useTransform(
     [edgeX, ctrlX],
     ([e, c]: number[]) =>
       `M0 0 L${e} 0 Q${c} ${height / 2} ${e} ${height} L0 ${height} Z`,
   );
 
-  //Keep animation controls in refs so we can cancel mid-animation on reversal
   const edgeAnim  = useRef<AnimationPlaybackControls | null>(null);
   const ctrlAnim1 = useRef<AnimationPlaybackControls | null>(null);
   const ctrlAnim2 = useRef<AnimationPlaybackControls | null>(null);
@@ -66,16 +57,10 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
     ctrlAnim2.current?.stop();
   };
 
-  //Drive the slider whenever isOpen changes 
   useEffect(() => {
     stopAll();
 
     if (isOpen) {
-      //Opening, middle leads, top/bottom trail:
-      //  ctrlX races straight to W in ~55% of the open duration.
-      //  edgeX takes the full duration (always behind ctrlX).
-      //  Because ctrlX > edgeX throughout, the middle bulges outward.
-      //  Both land on W at the end, clean flat rectangle, no snap.
       ctrlAnim1.current = animate(ctrlX, SIDEBAR_W, {
         duration: OPEN_DUR * 0.80,
         ease: EASE,
@@ -85,9 +70,6 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
         ease: EASE,
       });
     } else {
-      //Closing, top/bottom lead, middle trails:
-      //  edgeX retracts quickly (65% of close duration).
-      //  ctrlX starts after a short delay and finishes last.
       edgeAnim.current = animate(edgeX, 0, {
         duration: CLOSE_DUR * 0.78,
         ease: EASE,
@@ -98,16 +80,13 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
         ease: EASE,
       });
     }
-  //eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  //Enable pointer events on the content panel only once the sidebar is mostly open
   const [contentActive, setContentActive] = useState(false);
   useMotionValueEvent(edgeX, 'change', (latest) => {
     setContentActive(latest > SIDEBAR_W * 0.5);
   });
 
-  //Nav item stagger (opacity + y-slide)
   const navItemVariants = {
     open: (i: number) => ({
       opacity: 1,
@@ -138,7 +117,6 @@ const Sidebar = ({ isOpen, onClose, onSidebarMouseEnter, onSidebarMouseLeave }: 
   const routes = ['profile', 'sessions', 'metrics', 'about', 'studies'] as const;
 
   return (
-    //Always mounted, visibility is driven entirely by motion values, not mounting.
     <div
       className="sidebar-wrapper"
       onMouseEnter={onSidebarMouseEnter}
