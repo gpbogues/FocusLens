@@ -35,6 +35,7 @@ function formatDuration(seconds: number): string {
   return `${m}m`;
 }
 
+// avgFocus is between 0 and 3, so convert to percentage for display
 function formatFocus(avg: number): string {
   return `${Math.round((avg / 3) * 100)}%`;
 }
@@ -58,6 +59,7 @@ const MonthlyHeatmap = () => {
   const endDate   = new Date(now);
   const startDate = new Date(now);
   startDate.setFullYear(startDate.getFullYear() - 1);
+  // Shift startDate back to the nearest Monday so the grid always begins on a full week
   const dow = startDate.getDay();
   const daysToMon = dow === 0 ? 6 : dow - 1;
   startDate.setDate(startDate.getDate() - daysToMon);

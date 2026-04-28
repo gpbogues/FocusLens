@@ -72,7 +72,7 @@ const Metrics = () => {
   const [loading, setLoading]             = useState(true);
   const [activeMetric, setActiveMetric]   = useState<Metric>('focus');
 
-  
+  // Custom date range state
   const [customStart,   setCustomStart]   = useState<string | null>(null);
   const [customEnd,     setCustomEnd]     = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
@@ -80,7 +80,8 @@ const Metrics = () => {
   const [pickStep,      setPickStep]      = useState<'start' | 'end'>('start');
   const [calYear,       setCalYear]       = useState(() => new Date().getFullYear());
   const [calMonth,      setCalMonth]      = useState(() => new Date().getMonth());
-  
+  // Pending selections inside the modal.
+
   const [pendingStart,  setPendingStart]  = useState<string | null>(null);
   const [pendingEnd,    setPendingEnd]    = useState<string | null>(null);
 
@@ -141,6 +142,8 @@ const Metrics = () => {
     }[activeMetric];
 
     const rawMax = metricConfig.data.length > 0 ? Math.max(...metricConfig.data) : 100;
+    
+    // Round up to nearest 5 with 15% headroom so the top data point isn't flush with the chart ceiling
     const yMax   = Math.max(Math.ceil(rawMax * 1.15 / 5) * 5, 5);
 
     const config: ChartConfiguration = {
@@ -213,7 +216,6 @@ const Metrics = () => {
 
   
   function openDateModal() {
-    // Pre-populate pending with confirmed values so user can edit
     setPendingStart(customStart);
     setPendingEnd(customEnd);
     setPickStep(customStart ? 'end' : 'start');
