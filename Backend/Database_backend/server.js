@@ -967,7 +967,7 @@ app.get("/metrics/focus-over-time/:userId", (req, res) => {
       rows = db.prepare(`
         SELECT
           DATE(sessionStart) AS date,
-          AVG(avgFocus) AS focusScore,
+          AVG(avgFocus) * 100.0 / 3 AS focusScore,
           COUNT(*) AS sessionCount,
           SUM(activeDuration) AS totalDuration
         FROM UserSession
@@ -984,7 +984,7 @@ app.get("/metrics/focus-over-time/:userId", (req, res) => {
       rows = db.prepare(`
         SELECT
           DATE(sessionStart) AS date,
-          AVG(avgFocus) AS focusScore,
+          AVG(avgFocus) * 100.0 / 3 AS focusScore,
           COUNT(*) AS sessionCount,
           SUM(activeDuration) AS totalDuration
         FROM UserSession
