@@ -2,6 +2,8 @@ import os, logging, random, requests
 
 logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
 
+# dmb.py ~line300 for values getting sent for feedback generation
+
 # 1. Get the absolute path to the directory containing THIS file
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 

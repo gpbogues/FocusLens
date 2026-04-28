@@ -8,3 +8,4 @@ opencv-python
 mediapipe==0.10.33
 chromadb
 sentence-transformers
+bcrypt
