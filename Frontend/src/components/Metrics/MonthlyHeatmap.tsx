@@ -93,7 +93,6 @@ const MonthlyHeatmap = () => {
   const totalDays  = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
   const totalWeeks = Math.ceil(totalDays / 7);
 
-  // Build a set of column indices where a new month starts (for labels)
   const monthStartCols = new Map<number, string>();
   let lastMonth = -1;
   for (let col = 0; col < totalWeeks; col++) {
@@ -132,7 +131,6 @@ const MonthlyHeatmap = () => {
 
       <div style={{ display: 'flex', width: '100%', gap: 16, alignItems: 'flex-start' }}>
 
-        {/* Single CSS grid: DOW label column + week columns, aligned by row */}
         <div
           ref={containerRef}
           style={{
@@ -143,7 +141,7 @@ const MonthlyHeatmap = () => {
             gap: 2,
           }}
         >
-          {/* Row 0: corner + month labels */}
+          
           <div style={{ height: 22 }} />
           {Array.from({ length: totalWeeks }, (_, col) => (
             <div key={`ml-${col}`} style={{ height: 22, overflow: 'visible', position: 'relative' }}>
@@ -155,7 +153,6 @@ const MonthlyHeatmap = () => {
             </div>
           ))}
 
-          {/* Rows 1–7: DOW label + cells per row */}
           {DAY_LABELS.flatMap((dayLabel, row) => [
             <span key={`dow-${row}`} className="hm-dow-label">{dayLabel}</span>,
             ...Array.from({ length: totalWeeks }, (_, col) => {
@@ -178,7 +175,6 @@ const MonthlyHeatmap = () => {
           ])}
         </div>
 
-        {/* Tooltip side panel */}
         <div style={{
           width: 160,
           flexShrink: 0,
