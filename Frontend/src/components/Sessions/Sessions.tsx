@@ -750,12 +750,10 @@ const Sessions = () => {
             <span className="session-stat-value session-stat-duration">{dur}</span>
           </div>
         </div>
-        {session.sessionDescription && (
-          <div className="session-grid-description">
-            <span className="session-detail-label">Description</span>
-            <p className="session-detail-desc-text">{session.sessionDescription}</p>
-          </div>
-        )}
+        <div className="session-grid-description">
+          <span className="session-detail-label">Description</span>
+          <p className="session-detail-desc-text">{session.sessionDescription || "No Description"}</p>
+        </div>
       </div>
     );
   };

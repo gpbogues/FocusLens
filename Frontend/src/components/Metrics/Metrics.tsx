@@ -18,8 +18,11 @@ interface FocusResponse {
 
 Chart.register(...registerables);
 
-type Range  = '7D' | '1M' | '1Y';
+type Range  = '7D' | '1M' | '1Y' | 'custom';
 type Metric = 'focus' | 'time' | 'sessions';
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const WEEKDAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 function getLabels(range: Range): string[] {
   if (range === '7D') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -41,6 +44,20 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+function fmtShort(dateStr: string): string {
+  const [, m, day] = dateStr.split('-');
+  return `${MONTHS[+m - 1]} ${+day}`;
+}
+
+function toDateStr(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function todayStr(): string {
+  const t = new Date();
+  return toDateStr(t.getFullYear(), t.getMonth(), t.getDate());
+}
+
 const Metrics = () => {
   const { user } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
@@ -55,11 +72,24 @@ const Metrics = () => {
   const [loading, setLoading]             = useState(true);
   const [activeMetric, setActiveMetric]   = useState<Metric>('focus');
 
+  // Custom date range state
+  const [customStart,   setCustomStart]   = useState<string | null>(null);
+  const [customEnd,     setCustomEnd]     = useState<string | null>(null);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [pickStep,      setPickStep]      = useState<'start' | 'end'>('start');
+  const [calYear,       setCalYear]       = useState(() => new Date().getFullYear());
+  const [calMonth,      setCalMonth]      = useState(() => new Date().getMonth());
+  // Pending selections inside the modal (committed only on Confirm)
+  const [pendingStart,  setPendingStart]  = useState<string | null>(null);
+  const [pendingEnd,    setPendingEnd]    = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
 
   useEffect(() => {
     if (!user) return;
+    if (range === 'custom' && (!customStart || !customEnd)) return;
+
     const fetchLineData = async () => {
       setLoading(true);
       setSessionCount(null);
@@ -69,10 +99,10 @@ const Metrics = () => {
       setDurationData([]);
       setSessionData([]);
       try {
-        const res = await fetch(
-          `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`,
-          { credentials: 'include' }
-        );
+        const url = range === 'custom'
+          ? `${API_URL}/metrics/focus-over-time/${user.userId}?start=${customStart}&end=${customEnd}`
+          : `${API_URL}/metrics/focus-over-time/${user.userId}?range=${range}`;
+        const res = await fetch(url, { credentials: 'include' });
         const json: FocusResponse = await res.json();
         if (json.success && json.data.length > 0) {
           setChartLabels(json.data.map((d: any) => d.date));
@@ -89,7 +119,7 @@ const Metrics = () => {
       }
     };
     fetchLineData();
-  }, [range, user]);
+  }, [range, user, customStart, customEnd]);
 
   useEffect(() => {
     if (!canvasRef.current || focusData.length === 0) return;
@@ -180,6 +210,144 @@ const Metrics = () => {
     return () => chartRef.current?.destroy();
   }, [focusData, durationData, sessionData, range, activeMetric, chartLabels]);
 
+  // Calendar helpers
+  function openDateModal() {
+    // Pre-populate pending with confirmed values so user can edit
+    setPendingStart(customStart);
+    setPendingEnd(customEnd);
+    setPickStep(customStart ? 'end' : 'start');
+    if (customStart) {
+      const [y, m] = customStart.split('-').map(Number);
+      setCalYear(y);
+      setCalMonth(m - 1);
+    } else {
+      setCalYear(new Date().getFullYear());
+      setCalMonth(new Date().getMonth());
+    }
+    setShowDateModal(true);
+  }
+
+  function prevMonth() {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+    else setCalMonth(m => m - 1);
+  }
+
+  function nextMonth() {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+    else setCalMonth(m => m + 1);
+  }
+
+  function handleDayClick(dateStr: string) {
+    if (dateStr > todayStr()) return;
+    // Clicking a selected date deselects it
+    if (dateStr === pendingEnd) {
+      setPendingEnd(null);
+      setPickStep('end');
+      return;
+    }
+    if (dateStr === pendingStart) {
+      setPendingStart(null);
+      setPendingEnd(null);
+      setPickStep('start');
+      return;
+    }
+    if (pickStep === 'start') {
+      setPendingStart(dateStr);
+      setPendingEnd(null);
+      setPickStep('end');
+    } else {
+      if (!pendingStart || dateStr < pendingStart) {
+        // Clicked before start: reset, treat as new start
+        setPendingStart(dateStr);
+        setPendingEnd(null);
+      } else {
+        setPendingEnd(dateStr);
+      }
+    }
+  }
+
+  function confirmDates() {
+    if (!pendingStart || !pendingEnd) return;
+    setCustomStart(pendingStart);
+    setCustomEnd(pendingEnd);
+    setRange('custom');
+    setShowDateModal(false);
+  }
+
+  function cancelModal() {
+    setShowDateModal(false);
+  }
+
+  // Build calendar day grid
+  function buildCalendarDays() {
+    const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const daysInPrev  = new Date(calYear, calMonth, 0).getDate();
+    const today = todayStr();
+
+    const cells: { dateStr: string; day: number; otherMonth: boolean }[] = [];
+
+    // Leading days from previous month
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d = daysInPrev - i;
+      const m = calMonth === 0 ? 11 : calMonth - 1;
+      const y = calMonth === 0 ? calYear - 1 : calYear;
+      cells.push({ dateStr: toDateStr(y, m, d), day: d, otherMonth: true });
+    }
+
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ dateStr: toDateStr(calYear, calMonth, d), day: d, otherMonth: false });
+    }
+
+    // Trailing days from next month
+    const trailing = 42 - cells.length;
+    for (let d = 1; d <= trailing; d++) {
+      const m = calMonth === 11 ? 0 : calMonth + 1;
+      const y = calMonth === 11 ? calYear + 1 : calYear;
+      cells.push({ dateStr: toDateStr(y, m, d), day: d, otherMonth: true });
+    }
+
+    return cells.map(({ dateStr, day, otherMonth }) => {
+      const isDisabled  = dateStr > today;
+      const isStart     = dateStr === pendingStart;
+      const isEnd       = dateStr === pendingEnd;
+      const isToday     = dateStr === today;
+      const inRange     = pendingStart && pendingEnd
+        && dateStr > pendingStart && dateStr < pendingEnd;
+
+      const classes = [
+        'cal-day',
+        otherMonth  ? 'other-month'      : '',
+        isDisabled  ? 'disabled'         : '',
+        isStart     ? 'selected-start'   : '',
+        isEnd       ? 'selected-end'     : '',
+        inRange     ? 'in-range'         : '',
+        isToday && !isStart && !isEnd ? 'today' : '',
+      ].filter(Boolean).join(' ');
+
+      return (
+        <button
+          key={dateStr}
+          className={classes}
+          onClick={() => !isDisabled && handleDayClick(dateStr)}
+          disabled={isDisabled}
+          type="button"
+        >
+          {day}
+        </button>
+      );
+    });
+  }
+
+  const sectionLabel =
+    range === '7D'    ? '7 day review'
+    : range === '1M'  ? 'Monthly review'
+    : range === '1Y'  ? 'Yearly review'
+    : customStart && customEnd
+      ? `${fmtShort(customStart)} – ${fmtShort(customEnd)}`
+      : 'Custom range';
+
   return (
     <div className="metrics-page">
       <div className="metrics-header">
@@ -190,9 +358,7 @@ const Metrics = () => {
         <div className="metrics-card">
           <div className="metrics-card-header">
             <div>
-              <p className="metrics-section-label">
-                {range === '7D' ? '7 day review' : range === '1M' ? 'Monthly review' : 'Yearly review'}
-              </p>
+              <p className="metrics-section-label">{sectionLabel}</p>
               <h3 className="metrics-card-title">Focus over time</h3>
             </div>
             <div className="metrics-range-toggle">
@@ -205,6 +371,14 @@ const Metrics = () => {
                   {r}
                 </button>
               ))}
+              <button
+                className={`metrics-range-btn ${range === 'custom' ? 'active' : ''}`}
+                onClick={openDateModal}
+              >
+                {range === 'custom' && customStart && customEnd
+                  ? `${fmtShort(customStart)} – ${fmtShort(customEnd)}`
+                  : 'Custom'}
+              </button>
             </div>
           </div>
 
@@ -269,6 +443,48 @@ const Metrics = () => {
       <div className="metrics-section">
         <MonthlyHeatmap />
       </div>
+
+      {/* Custom Date Range Modal */}
+      {showDateModal && (
+        <div className="modal-overlay" onClick={cancelModal}>
+          <div className="date-modal-box" onClick={e => e.stopPropagation()}>
+            <p className="date-modal-title">Select date range</p>
+            <p className="date-modal-step-label">
+              {pickStep === 'start'
+                ? 'Select a start date'
+                : pendingEnd
+                  ? `${fmtShort(pendingStart!)} → ${fmtShort(pendingEnd)}`
+                  : `Start: ${fmtShort(pendingStart!)} — now select end date`}
+            </p>
+
+            <div className="cal-header">
+              <button className="cal-nav-btn" onClick={prevMonth} type="button">&#8249;</button>
+              <span className="cal-month-label">{MONTHS[calMonth]} {calYear}</span>
+              <button className="cal-nav-btn" onClick={nextMonth} type="button">&#8250;</button>
+            </div>
+
+            <div className="cal-weekdays">
+              {WEEKDAYS.map(d => <span key={d}>{d}</span>)}
+            </div>
+
+            <div className="cal-grid">
+              {buildCalendarDays()}
+            </div>
+
+            <div className="date-modal-footer">
+              <button className="modal-cancel" onClick={cancelModal} type="button">Cancel</button>
+              <button
+                className="modal-save"
+                onClick={confirmDates}
+                disabled={!pendingStart || !pendingEnd}
+                type="button"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -21,6 +21,16 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT  = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 sys.path.insert(0, REPO_ROOT)
 
+# Load rag/.env early so SEED_USER_ID and GROQ_API_KEY are available before any prompts
+_env_path = os.path.join(REPO_ROOT, "rag", ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 try:
     import bcrypt as _bcrypt
 except ImportError:
@@ -335,7 +345,16 @@ def seed_sessions(user_id: int) -> list:
         for label in ordered:
             _api("post", "/session/chunk", json={"sessionId": session_id, "userId": user_id, "chunkStatus": label})
 
-        # Generate AI feedback locally
+        # Finalize session first so it's saved even if feedback fails
+        _api("patch", f"/sessions/{session_id}", json={
+            "sessionName":        name,
+            "sessionDescription": description,
+            "sessionEnd":         _fmt(end),
+            "activeDuration":     active_secs,
+            "sessionFeedback":    None,
+        })
+
+        # Generate AI feedback and patch it in
         stats     = build_stats(archetype, chunk_dist, active_secs)
         feedback  = None
         fb_status = "SKIP (no key)"
@@ -345,14 +364,14 @@ def seed_sessions(user_id: int) -> list:
         except Exception as e:
             fb_status = f"ERR ({type(e).__name__})"
 
-        # Finalize: PATCH computes avgFocus server-side from chunks
-        _api("patch", f"/sessions/{session_id}", json={
-            "sessionName":        name,
-            "sessionDescription": description,
-            "sessionEnd":         _fmt(end),
-            "activeDuration":     active_secs,
-            "sessionFeedback":    feedback,
-        })
+        if feedback:
+            _api("patch", f"/sessions/{session_id}", json={
+                "sessionName":        name,
+                "sessionDescription": description,
+                "sessionEnd":         _fmt(end),
+                "activeDuration":     active_secs,
+                "sessionFeedback":    feedback,
+            })
 
         records.append({
             "session_id":    session_id,
@@ -478,7 +497,77 @@ def seed_folders(user_id: int, sessions: list):
                 count += 1
         print(f"  '{fname}': {count} sessions")
 
-#  entry point 
+# recent sessions (past 7 days boost)
+
+def seed_recent_sessions(user_id: int) -> list:
+    today   = datetime(2026, 4, 27)
+    # 2-3 sessions per day for a natural-looking week
+    offsets = sorted(random.sample(range(7), 5) + random.sample(range(7), 2))
+    dates   = [today - timedelta(days=d) for d in offsets]
+    records = []
+    print(f"  Seeding {len(dates)} recent sessions (past 7 days)...")
+
+    for i, date in enumerate(dates):
+        archetype   = _pick_archetype()
+        duration    = max(600, _pick_duration())
+        hour        = _pick_hour()
+        start       = date.replace(hour=hour, minute=random.randint(0, 59), second=random.randint(0, 59))
+        active_secs = int(duration * random.uniform(0.90, 1.00))
+        end         = start + timedelta(seconds=duration)
+        name        = random.choice(SESSION_NAMES)
+        description = random.choice(SESSION_DESCRIPTIONS) if random.random() < 0.40 else None
+
+        r          = _api("post", "/session/start", json={"userId": user_id, "sessionStart": _fmt(start)})
+        session_id = r["sessionId"]
+
+        n_chunks            = max(1, math.ceil(active_secs / 300))
+        chunk_dist, ordered = _gen_chunks(archetype, n_chunks)
+        for label in ordered:
+            _api("post", "/session/chunk", json={"sessionId": session_id, "userId": user_id, "chunkStatus": label})
+
+        # Save session first so it's persisted even if feedback fails
+        _api("patch", f"/sessions/{session_id}", json={
+            "sessionName":        name,
+            "sessionDescription": description,
+            "sessionEnd":         _fmt(end),
+            "activeDuration":     active_secs,
+            "sessionFeedback":    None,
+        })
+
+        stats     = build_stats(archetype, chunk_dist, active_secs)
+        feedback  = None
+        fb_status = "SKIP (no key)"
+        try:
+            feedback  = _call_with_retry(stats)
+            fb_status = "OK" if feedback else "SKIP (no key)"
+        except Exception as e:
+            fb_status = f"ERR ({type(e).__name__})"
+
+        if feedback:
+            _api("patch", f"/sessions/{session_id}", json={
+                "sessionName":        name,
+                "sessionDescription": description,
+                "sessionEnd":         _fmt(end),
+                "activeDuration":     active_secs,
+                "sessionFeedback":    feedback,
+            })
+
+        records.append({
+            "session_id":    session_id,
+            "session_start": start,
+            "active_secs":   active_secs,
+            "name":          name,
+            "chunk_dist":    chunk_dist,
+            "archetype":     archetype,
+            "session_end":   _fmt(end),
+        })
+        print(f"  [{i+1:2}/{len(dates)}] {_fmt(start)} | {name:<33} | {active_secs//60:3}min | {archetype:<12} | fb: {fb_status}")
+        time.sleep(3)
+
+    return records
+
+
+#  entry point
 
 def main():
     print(f"API: {API_BASE}\n")
@@ -495,13 +584,16 @@ def main():
         existing = 0
 
     if existing > 0:
-        print(f"  Found {existing} existing sessions — checking for missing feedback...")
+        print(f"  Found {existing} existing sessions — seeding recent sessions first...")
+        recent = seed_recent_sessions(user_id)
+        print(f"  Inserted {len(recent)} recent sessions.\n")
+        print(f"  Checking for missing feedback...")
         pending = load_pending_sessions(user_id)
         print(f"  {len(pending)} session(s) missing feedback.")
         if pending:
             ok, fail = retry_feedback(pending)
             print(f"\n  Feedback retry: {ok}/{len(pending)} OK, {fail} skipped/failed.")
-        sessions = None
+        sessions = recent
     else:
         sessions = seed_sessions(user_id)
         print(f"\n  Inserted {len(sessions)} sessions.")

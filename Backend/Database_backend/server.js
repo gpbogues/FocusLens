@@ -956,28 +956,44 @@ app.post("/agent", async (req, res) => {
   }
 });
 
-// Focus over time - for the line chart
+// Focus over time, for the line chart
 app.get("/metrics/focus-over-time/:userId", (req, res) => {
   const { userId } = req.params;
-  const range = req.query.range || '7D';
-
-  const dateFilter = range === '7D' ? '-7 days'
-                   : range === '1M' ? '-30 days'
-                   : '-365 days';
+  const { range, start, end } = req.query;
 
   try {
-    const rows = db.prepare(`
-      SELECT
-        DATE(sessionStart) AS date,
-        AVG(avgFocus) AS focusScore,
-        COUNT(*) AS sessionCount,
-        SUM(activeDuration) AS totalDuration
-      FROM UserSession
-      WHERE UserID = ?
-        AND sessionStart >= datetime('now', ?)
-      GROUP BY DATE(sessionStart)
-      ORDER BY date ASC
-    `).all(userId, dateFilter);
+    let rows;
+    if (start && end) {
+      rows = db.prepare(`
+        SELECT
+          DATE(sessionStart) AS date,
+          AVG(avgFocus) AS focusScore,
+          COUNT(*) AS sessionCount,
+          SUM(activeDuration) AS totalDuration
+        FROM UserSession
+        WHERE UserID = ?
+          AND DATE(sessionStart) >= ?
+          AND DATE(sessionStart) <= ?
+        GROUP BY DATE(sessionStart)
+        ORDER BY date ASC
+      `).all(userId, start, end);
+    } else {
+      const dateFilter = (!range || range === '7D') ? '-7 days'
+                       : range === '1M'             ? '-30 days'
+                       : '-365 days';
+      rows = db.prepare(`
+        SELECT
+          DATE(sessionStart) AS date,
+          AVG(avgFocus) AS focusScore,
+          COUNT(*) AS sessionCount,
+          SUM(activeDuration) AS totalDuration
+        FROM UserSession
+        WHERE UserID = ?
+          AND sessionStart >= datetime('now', ?)
+        GROUP BY DATE(sessionStart)
+        ORDER BY date ASC
+      `).all(userId, dateFilter);
+    }
 
     res.json({ success: true, data: rows });
   } catch (err) {
