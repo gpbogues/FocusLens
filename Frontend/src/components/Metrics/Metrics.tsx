@@ -72,7 +72,7 @@ const Metrics = () => {
   const [loading, setLoading]             = useState(true);
   const [activeMetric, setActiveMetric]   = useState<Metric>('focus');
 
-  // Custom date range state
+  
   const [customStart,   setCustomStart]   = useState<string | null>(null);
   const [customEnd,     setCustomEnd]     = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
@@ -80,7 +80,7 @@ const Metrics = () => {
   const [pickStep,      setPickStep]      = useState<'start' | 'end'>('start');
   const [calYear,       setCalYear]       = useState(() => new Date().getFullYear());
   const [calMonth,      setCalMonth]      = useState(() => new Date().getMonth());
-  // Pending selections inside the modal (committed only on Confirm)
+  
   const [pendingStart,  setPendingStart]  = useState<string | null>(null);
   const [pendingEnd,    setPendingEnd]    = useState<string | null>(null);
 
@@ -211,7 +211,7 @@ const Metrics = () => {
     return () => chartRef.current?.destroy();
   }, [focusData, durationData, sessionData, range, activeMetric, chartLabels]);
 
-  // Calendar helpers
+  
   function openDateModal() {
     // Pre-populate pending with confirmed values so user can edit
     setPendingStart(customStart);
@@ -240,7 +240,7 @@ const Metrics = () => {
 
   function handleDayClick(dateStr: string) {
     if (dateStr > todayStr()) return;
-    // Clicking a selected date deselects it
+
     if (dateStr === pendingEnd) {
       setPendingEnd(null);
       setPickStep('end');
@@ -258,7 +258,7 @@ const Metrics = () => {
       setPickStep('end');
     } else {
       if (!pendingStart || dateStr < pendingStart) {
-        // Clicked before start: reset, treat as new start
+        
         setPendingStart(dateStr);
         setPendingEnd(null);
       } else {
@@ -279,7 +279,7 @@ const Metrics = () => {
     setShowDateModal(false);
   }
 
-  // Build calendar day grid
+  
   function buildCalendarDays() {
     const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
     const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
@@ -288,7 +288,7 @@ const Metrics = () => {
 
     const cells: { dateStr: string; day: number; otherMonth: boolean }[] = [];
 
-    // Leading days from previous month
+    
     for (let i = firstDow - 1; i >= 0; i--) {
       const d = daysInPrev - i;
       const m = calMonth === 0 ? 11 : calMonth - 1;
@@ -296,12 +296,12 @@ const Metrics = () => {
       cells.push({ dateStr: toDateStr(y, m, d), day: d, otherMonth: true });
     }
 
-    // Current month days
+    
     for (let d = 1; d <= daysInMonth; d++) {
       cells.push({ dateStr: toDateStr(calYear, calMonth, d), day: d, otherMonth: false });
     }
 
-    // Trailing days from next month
+   
     const trailing = 42 - cells.length;
     for (let d = 1; d <= trailing; d++) {
       const m = calMonth === 11 ? 0 : calMonth + 1;
@@ -469,7 +469,7 @@ const Metrics = () => {
         <MonthlyHeatmap />
       </div>
 
-      {/* CSV Download Confirmation */}
+      
       {csvConfirm && (
         <div className="modal-overlay" onClick={() => setCsvConfirm(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -483,7 +483,7 @@ const Metrics = () => {
         </div>
       )}
 
-      {/* Custom Date Range Modal */}
+      
       {showDateModal && (
         <div className="modal-overlay" onClick={cancelModal}>
           <div className="date-modal-box" onClick={e => e.stopPropagation()}>
