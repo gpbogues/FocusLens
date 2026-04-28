@@ -32,5 +32,6 @@ dist/
 rag/focus_db/
 
 overview.txt
+overview_tldr.txt
 
 scripts

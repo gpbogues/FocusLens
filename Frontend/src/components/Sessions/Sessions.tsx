@@ -1258,8 +1258,8 @@ const Sessions = () => {
                   <p className="chunks-header-title">{session.sessionName || formatDateTime(session.sessionStart).date}</p>
                 </div>
                 <div className="chunks-header-right">
-                  <span className="chunks-avg-big">{session.avgFocus.toFixed(1)}</span>
-                  <span className="chunks-avg-sub">avg focus / 3.0</span>
+                  <span className="chunks-avg-big">{Math.round(session.avgFocus * 100 / 3)}%</span>
+                  <span className="chunks-avg-sub">avg focus</span>
                 </div>
               </div>
 
