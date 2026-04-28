@@ -988,10 +988,13 @@ const Studies = () => {
           <section key={category} className="studies-category">
             <h3 className="studies-category-label">{category}</h3>
             <div className="studies-list">
-              {visible.map((study) => (
+              {visible.map((study, idx) => {
+                const isRevealed = isExpanded && idx >= CARDS_PER_CATEGORY;
+                return (
                 <div
                   key={study.title}
-                  className="study-card"
+                  className={`study-card${isRevealed ? ' study-card--reveal' : ''}`}
+                  style={isRevealed ? { animationDelay: `${(idx - CARDS_PER_CATEGORY) * 0.07}s` } : undefined}
                   onClick={() => handleCardClick(study)}
                   role="button"
                   tabIndex={0}
@@ -1024,7 +1027,8 @@ const Studies = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {hiddenCount > 0 && (

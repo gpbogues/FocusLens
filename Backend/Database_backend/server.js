@@ -918,8 +918,11 @@ app.delete("/user/account", async (req, res) => {
 const AGENT_SYSTEM_PROMPT = `You are an intent classifier for FocusLens, a focus-tracking app.
 Classify the user message into exactly one of these actions:
 - navigate_sessions: user wants to view their past sessions or history
+- navigate_sessions_folders: user wants to view session folders or organize sessions
 - navigate_metrics: user wants to see focus metrics, analytics, or stats
 - navigate_profile: user wants to edit their profile or settings
+- navigate_studies: user wants to learn about the research, science, AI feedback sources, or evidence behind FocusLens results
+- navigate_about: user wants to know what FocusLens is, how to use it, or learn about the team
 - start_session: user wants to start a new focus/work session
 - unknown: input does not clearly match any action above
 

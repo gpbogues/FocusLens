@@ -4,12 +4,37 @@
   padding: 0 0 64px 0;
 }
 
-/* ── Hero ─────────────────────────────────────────────── */
+@keyframes aboutFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero */
 .about-hero {
   padding: 48px 0 52px;
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 48px;
+  animation: aboutFadeUp 0.45s ease both;
 }
+
+.about-section:nth-child(2) { animation: aboutFadeUp 0.45s ease both 0.1s; }
+.about-section:nth-child(3) { animation: aboutFadeUp 0.45s ease both 0.18s; }
+.about-section:nth-child(4) { animation: aboutFadeUp 0.45s ease both 0.26s; }
+.about-section:nth-child(5) { animation: aboutFadeUp 0.45s ease both 0.34s; }
+.about-section:nth-child(6) { animation: aboutFadeUp 0.45s ease both 0.42s; }
+
+.about-card:nth-child(1) { animation: aboutFadeUp 0.4s ease both 0.22s; }
+.about-card:nth-child(2) { animation: aboutFadeUp 0.4s ease both 0.3s; }
+.about-card:nth-child(3) { animation: aboutFadeUp 0.4s ease both 0.38s; }
+
+.about-step:nth-child(1) { animation: aboutFadeUp 0.4s ease both 0.28s; }
+.about-step:nth-child(2) { animation: aboutFadeUp 0.4s ease both 0.35s; }
+.about-step:nth-child(3) { animation: aboutFadeUp 0.4s ease both 0.42s; }
+.about-step:nth-child(4) { animation: aboutFadeUp 0.4s ease both 0.49s; }
+
+.about-tip:nth-child(1) { animation: aboutFadeUp 0.4s ease both 0.32s; }
+.about-tip:nth-child(2) { animation: aboutFadeUp 0.4s ease both 0.39s; }
+.about-tip:nth-child(3) { animation: aboutFadeUp 0.4s ease both 0.46s; }
 
 .about-hero-eyebrow {
   font-size: 12px;
@@ -18,6 +43,7 @@
   text-transform: uppercase;
   color: var(--color-accent);
   margin-bottom: 14px;
+  animation: aboutFadeUp 0.45s ease both 0.06s;
 }
 
 .about-hero-title {
@@ -27,6 +53,7 @@
   letter-spacing: -0.02em;
   color: var(--color-text-bright);
   margin: 0 0 18px 0;
+  animation: aboutFadeUp 0.45s ease both 0.13s;
 }
 
 .about-hero-sub {
@@ -35,9 +62,10 @@
   color: var(--color-text-secondary);
   max-width: 600px;
   margin: 0;
+  animation: aboutFadeUp 0.45s ease both 0.2s;
 }
 
-/* ── Sections ─────────────────────────────────────────── */
+/* Sections  */
 .about-section {
   margin-bottom: 52px;
 }
@@ -55,7 +83,7 @@
   margin: 0 0 20px 0;
 }
 
-/* ── Body text ────────────────────────────────────────── */
+/* Body text */
 .about-text-block {
   display: flex;
   flex-direction: column;
@@ -69,7 +97,7 @@
   margin: 0;
 }
 
-/* ── Why-it-matters cards ─────────────────────────────── */
+/* Why-it-matters cards */
 .about-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -99,7 +127,7 @@
   margin: 0;
 }
 
-/* ── Steps ────────────────────────────────────────────── */
+/* Steps */
 .about-steps {
   display: flex;
   flex-direction: column;
@@ -145,7 +173,7 @@
   margin: 0;
 }
 
-/* ── Tips ─────────────────────────────────────────────── */
+/* Tips */
 .about-tips {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -173,7 +201,7 @@
   margin: 0;
 }
 
-/* ── Team ─────────────────────────────────────────────── */
+/* Team */
 .about-team {
   display: flex;
   flex-wrap: wrap;
@@ -188,6 +216,7 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 10px 16px 10px 12px;
+  animation: aboutFadeUp 0.4s ease both 0.42s;
 }
 
 .about-team-avatar {
@@ -211,7 +240,7 @@
   color: var(--color-text-primary);
 }
 
-/* ── Responsive ───────────────────────────────────────── */
+/* Responsive */
 @media (max-width: 600px) {
   .about-hero-title {
     font-size: 26px;
