@@ -91,12 +91,14 @@
 }
 
 .hm-dow-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-muted, var(--color-text-secondary));
-  height: 13px;
-  line-height: 13px;
-  width: 28px;
+  width: 32px;
   text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 2px;
 }
 
 .hm-grid {
@@ -111,17 +113,23 @@
 }
 
 .hm-cell {
-  width: 14px;
-  height: 20px;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: 2px;
   cursor: pointer;
   transition: opacity 0.1s;
 }
 
-.hm-cell--pad {
-  background: transparent;
+.hm-cell--spacer {
+  background: transparent !important;
   cursor: default;
   pointer-events: none;
+  opacity: 0;
+}
+
+.hm-cell--today {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .hm-cell--empty { background-color: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-surface)); }
@@ -186,6 +194,8 @@
 .hm-legend-cell {
   cursor: default;
   pointer-events: none;
+  width: 14px;
+  flex-shrink: 0;
 }
 
 .hm-loading {

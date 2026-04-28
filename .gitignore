@@ -30,3 +30,5 @@ dist/
 
 # ChromaDB vector store — hosted on EC2, not committed to git
 rag/focus_db/
+
+overview.txt

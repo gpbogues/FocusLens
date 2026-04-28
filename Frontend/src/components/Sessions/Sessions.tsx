@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { PieChart, Pie, Cell } from 'recharts';
 import './Sessions.css';
 
 
@@ -162,6 +161,20 @@ const CHUNK_COLORS: Record<string, string> = {
 
 const CHUNK_LABELS = ['VF', 'SF', 'SU', 'VU'] as const;
 
+const CHUNK_FULL_LABELS: Record<string, string> = {
+  VF: 'Very Focused',
+  SF: 'Slightly Focused',
+  SU: 'Slightly Unfocused',
+  VU: 'Very Unfocused',
+};
+
+const FOCUS_HEIGHTS: Record<string, number> = {
+  VF: 100,
+  SF: 66,
+  SU: 33,
+  VU: 8,
+};
+
 const Sessions = () => {
   const { user, sessionTrigger } = useAuth();
   const location = useLocation();
@@ -186,7 +199,6 @@ const Sessions = () => {
   const [chunksModal, setChunksModal] = useState<{ session: Session } | null>(null);
   const [modalChunks, setModalChunks] = useState<SessionChunk[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
-  const [activeDonutIdx, setActiveDonutIdx] = useState<number | null>(null);
 
   //Tab state, initialised from navigation state to avoid a second render/double-fetch on mount
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -1208,108 +1220,100 @@ const Sessions = () => {
       {chunksModal && (() => {
         const session = chunksModal.session;
 
-        const statusCounts = modalChunks.reduce<Record<string, number>>((acc, c) => {
-          acc[c.chunkStatus] = (acc[c.chunkStatus] ?? 0) + 1;
-          return acc;
-        }, {});
+        const totalChunks = modalChunks.length;
+        const focusedChunks = modalChunks.filter(c => c.chunkStatus === 'VF' || c.chunkStatus === 'SF').length;
+        let bestStreak = 0, curStreak = 0;
+        for (const c of modalChunks) {
+          if (c.chunkStatus === 'VF' || c.chunkStatus === 'SF') { curStreak++; bestStreak = Math.max(bestStreak, curStreak); }
+          else curStreak = 0;
+        }
 
-        const donutData = CHUNK_LABELS
-          .filter(label => statusCounts[label] > 0)
-          .map(label => ({ name: label, value: statusCounts[label] }));
+        const statusPresent = new Set(modalChunks.map(c => c.chunkStatus));
 
-        const parseTS = (str: string): number => new Date(str.replace(' ', 'T')).getTime();
+        const formatShortTime = (str: string): string => {
+          if (!str) return '—';
+          const timePart = str.replace(' ', 'T').split('T')[1];
+          if (!timePart) return '—';
+          const [hours, minutes] = timePart.split('.')[0].split(':');
+          const h = parseInt(hours);
+          return `${h % 12 || 12}:${minutes} ${h >= 12 ? 'PM' : 'AM'}`;
+        };
 
-        const sessionStartMs = parseTS(session.sessionStart);
-        const sessionEndMs = session.sessionEnd
-          ? parseTS(session.sessionEnd)
-          : (modalChunks.length > 0 ? parseTS(modalChunks[modalChunks.length - 1].endOfChunk) : sessionStartMs);
-        const totalMs = sessionEndMs - sessionStartMs;
-
-        const segments = modalChunks.map((chunk, idx) => {
-          const chunkStartMs = idx === 0 ? sessionStartMs : parseTS(modalChunks[idx - 1].endOfChunk);
-          const chunkEndMs = parseTS(chunk.endOfChunk);
-          const widthPct = totalMs > 0 ? ((chunkEndMs - chunkStartMs) / totalMs) * 100 : 0;
-          return { ...chunk, widthPct };
-        });
-
-        const tlStart = formatDateTime(session.sessionStart).time;
-        const tlEnd = formatDateTime(session.sessionEnd).time;
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const isToday = session.sessionStart.slice(0, 10) === todayStr;
+        const dateCtx = isToday ? 'TODAY' : formatDateTime(session.sessionStart).date.toUpperCase();
+        const startShort = formatShortTime(session.sessionStart);
+        const endShort = session.sessionEnd ? formatShortTime(session.sessionEnd) : '—';
+        const dur = calcTotalDuration(session.sessionStart, session.sessionEnd, session.activeDuration);
 
         return (
           <div className="modal-overlay" onClick={() => setChunksModal(null)}>
             <div className="modal-box chunks-modal-box" onClick={e => e.stopPropagation()}>
-
               <button className="chunks-modal-close" onClick={() => setChunksModal(null)}>✕</button>
 
-              <div className="chunks-modal-header">
-                <p className="modal-title">{session.sessionName || formatDateTime(session.sessionStart).date}</p>
-                <span className="chunks-avg-focus-label">
-                  Avg Focus: <strong>{session.avgFocus.toFixed(1)}</strong> / 3
-                </span>
+              <div className="chunks-header-row">
+                <div className="chunks-header-left">
+                  <p className="chunks-header-meta">{dateCtx} · {startShort} – {endShort}</p>
+                  <p className="chunks-header-title">{session.sessionName || formatDateTime(session.sessionStart).date}</p>
+                </div>
+                <div className="chunks-header-right">
+                  <span className="chunks-avg-big">{session.avgFocus.toFixed(1)}</span>
+                  <span className="chunks-avg-sub">avg focus / 3.0</span>
+                </div>
+              </div>
+
+              <div className="chunks-stats-row">
+                <div className="chunks-stat-box">
+                  <span className="chunks-stat-label">Duration</span>
+                  <span className="chunks-stat-value">{dur}</span>
+                </div>
+                <div className="chunks-stat-box">
+                  <span className="chunks-stat-label">Focused Chunks</span>
+                  <span className="chunks-stat-value">{focusedChunks} / {totalChunks}</span>
+                </div>
+                <div className="chunks-stat-box">
+                  <span className="chunks-stat-label">Best Streak</span>
+                  <span className="chunks-stat-value">{bestStreak} chunk{bestStreak !== 1 ? 's' : ''}</span>
+                </div>
               </div>
 
               {chunksLoading ? (
-                <p className="modal-subtitle" style={{ textAlign: 'center', padding: '40px 0' }}>Loading chunks...</p>
+                <p className="modal-subtitle" style={{ textAlign: 'center', padding: '40px 0' }}>Loading...</p>
               ) : modalChunks.length === 0 ? (
                 <p className="modal-subtitle" style={{ textAlign: 'center', padding: '40px 0' }}>No chunk data recorded for this session.</p>
               ) : (
                 <>
-                  <div className="chunks-legend">
-                    {CHUNK_LABELS.filter(l => statusCounts[l] > 0).map(label => (
-                      <div key={label} className="chunks-legend-item">
-                        <span className="chunks-legend-dot" style={{ background: CHUNK_COLORS[label] }} />
-                        <span className="chunks-legend-label">{label}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="chunks-chart-container">
-                    <PieChart width={200} height={200}>
-                      <Pie
-                        data={donutData}
-                        cx={100}
-                        cy={100}
-                        innerRadius={60}
-                        outerRadius={90}
-                        dataKey="value"
-                        startAngle={90}
-                        endAngle={-270}
-                        strokeWidth={0}
-                        onMouseEnter={(_: any, idx: number) => setActiveDonutIdx(idx)}
-                        onMouseLeave={() => setActiveDonutIdx(null)}
-                      >
-                        {donutData.map(entry => (
-                          <Cell key={entry.name} fill={CHUNK_COLORS[entry.name]} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                    <div className="chunks-donut-center">
-                      <span className="chunks-donut-value">{session.avgFocus.toFixed(1)}</span>
-                      <span className="chunks-donut-sublabel">avg focus</span>
-                    </div>
-                    {activeDonutIdx !== null && donutData[activeDonutIdx] && (
-                      <div className="chunks-donut-hover">
-                        <span className="chunks-donut-hover-dot" style={{ background: CHUNK_COLORS[donutData[activeDonutIdx].name] }} />
-                        {donutData[activeDonutIdx].name}: {donutData[activeDonutIdx].value} chunks
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="chunks-timeline-section">
-                    <div className="chunks-timeline-bar">
-                      {segments.map(seg => (
+                  <div className="chunks-barchart-section">
+                    <p className="chunks-barchart-label">Focus Intensity Over Time</p>
+                    <div className="chunks-barchart">
+                      {modalChunks.map(chunk => (
                         <div
-                          key={seg.ChunkId}
-                          className="chunks-timeline-segment"
-                          style={{ width: `${100 / segments.length}%`, background: CHUNK_COLORS[seg.chunkStatus] }}
-                          data-tooltip={`${seg.chunkStatus} · ${formatUTCTime(seg.endOfChunk)}`}
-                        />
+                          key={chunk.ChunkId}
+                          className="chunks-bar-wrapper"
+                          title={`${CHUNK_FULL_LABELS[chunk.chunkStatus]} · ${formatUTCTime(chunk.endOfChunk)}`}
+                        >
+                          <div
+                            className="chunks-bar"
+                            style={{ height: `${FOCUS_HEIGHTS[chunk.chunkStatus]}%`, background: CHUNK_COLORS[chunk.chunkStatus] }}
+                          />
+                        </div>
                       ))}
                     </div>
-                    <div className="chunks-timeline-ticks">
-                      <span>{tlStart}</span>
-                      <span>{tlEnd}</span>
+                    <div className="chunks-barchart-ticks">
+                      <span>{startShort}</span>
+                      <span>{endShort}</span>
                     </div>
+                  </div>
+
+                  <div className="chunks-legend">
+                    {CHUNK_LABELS.filter(l => statusPresent.has(l)).map(label => (
+                      <div key={label} className="chunks-legend-item">
+                        <span className="chunks-legend-dot" style={{ background: CHUNK_COLORS[label] }} />
+                        <span className="chunks-legend-abbr">{label}</span>
+                        <span className="chunks-legend-full">{CHUNK_FULL_LABELS[label]}</span>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}

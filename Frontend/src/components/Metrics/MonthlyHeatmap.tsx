@@ -11,13 +11,12 @@ interface DayData {
 
 interface TooltipState {
   visible: boolean;
-  x: number;
-  y: number;
   data: DayData | null;
   dateLabel: string;
 }
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function getColorClass(count: number): string {
   if (count === 0) return 'hm-cell--empty';
@@ -52,7 +51,7 @@ const MonthlyHeatmap = () => {
   const [dataMap, setDataMap] = useState<Record<string, DayData>>({});
   const [loading, setLoading] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipState>({
-    visible: false, x: 0, y: 0, data: null, dateLabel: '',
+    visible: false, data: null, dateLabel: '',
   });
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -91,34 +90,26 @@ const MonthlyHeatmap = () => {
     }).finally(() => setLoading(false));
   }, [user?.userId]);
 
-  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+  const totalDays  = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
   const totalWeeks = Math.ceil(totalDays / 7);
 
-  const monthLabels: { col: number; label: string }[] = [];
+  // Build a set of column indices where a new month starts (for labels)
+  const monthStartCols = new Map<number, string>();
   let lastMonth = -1;
   for (let col = 0; col < totalWeeks; col++) {
     const d = new Date(startDate);
     d.setDate(d.getDate() + col * 7);
     if (d.getMonth() !== lastMonth) {
       lastMonth = d.getMonth();
-      monthLabels.push({
-        col,
-        label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()],
-      });
+      if (col > 0) monthStartCols.set(col, MONTH_NAMES[d.getMonth()]);
     }
   }
 
   const todayStr = toDateStr(now);
 
-  function handleMouseEnter(e: React.MouseEvent, iso: string) {
-    const container = containerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const cellRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  function handleMouseEnter(iso: string) {
     setTooltip({
       visible: true,
-      x: cellRect.left - rect.left + cellRect.width / 2,
-      y: cellRect.top - rect.top,
       data: dataMap[iso] ?? null,
       dateLabel: new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
@@ -141,66 +132,53 @@ const MonthlyHeatmap = () => {
 
       <div style={{ display: 'flex', width: '100%', gap: 16, alignItems: 'flex-start' }}>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 24, flexShrink: 0 }}>
-          {DAY_LABELS.map(d => (
-            <span key={d} className="hm-dow-label" style={{ marginBottom: 2 }}>{d}</span>
-          ))}
-        </div>
-
-        <div ref={containerRef} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          <div style={{ height: 20, position: 'relative', marginBottom: 4 }}>
-            {monthLabels.slice(1).map(({ col, label }) => (
-              <span
-                key={col}
-                style={{
-                  position: 'absolute',
-                  left: `${(col / totalWeeks) * 100}%`,
-                  fontSize: 11,
-                  color: 'var(--color-text-muted)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-
-          <div style={{
+        {/* Single CSS grid: DOW label column + week columns, aligned by row */}
+        <div
+          ref={containerRef}
+          style={{
+            flex: 1,
+            minWidth: 0,
             display: 'grid',
-            gridTemplateColumns: `repeat(${totalWeeks}, 1fr)`,
+            gridTemplateColumns: `32px repeat(${totalWeeks}, 1fr)`,
             gap: 2,
-            width: '100%',
-          }}>
-            {Array.from({ length: totalWeeks }, (_, col) => (
-              <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {Array.from({ length: 7 }, (_, row) => {
-                  const d = new Date(startDate);
-                  d.setDate(d.getDate() + col * 7 + row);
-                  if (d > endDate) return <div key={row} style={{ height: 13 }} />;
-                  const iso   = toDateStr(d);
-                  const count = dataMap[iso]?.sessionCount ?? 0;
-                  const isToday = iso === todayStr;
-                  return (
-                    <div
-                      key={iso}
-                      className={`hm-cell ${getColorClass(count)}`}
-                      style={{
-                        width: '100%',
-                        height: 13,
-                        borderRadius: 2,
-                        ...(isToday ? { outline: '1px solid #7F77DD', outlineOffset: '1px' } : {}),
-                      }}
-                      onMouseEnter={e => handleMouseEnter(e, iso)}
-                      onMouseLeave={handleMouseLeave}
-                      aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
-                    />
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+          }}
+        >
+          {/* Row 0: corner + month labels */}
+          <div style={{ height: 22 }} />
+          {Array.from({ length: totalWeeks }, (_, col) => (
+            <div key={`ml-${col}`} style={{ height: 22, overflow: 'visible', position: 'relative' }}>
+              {monthStartCols.has(col) && (
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', position: 'absolute' }}>
+                  {monthStartCols.get(col)}
+                </span>
+              )}
+            </div>
+          ))}
+
+          {/* Rows 1–7: DOW label + cells per row */}
+          {DAY_LABELS.flatMap((dayLabel, row) => [
+            <span key={`dow-${row}`} className="hm-dow-label">{dayLabel}</span>,
+            ...Array.from({ length: totalWeeks }, (_, col) => {
+              const d = new Date(startDate);
+              d.setDate(d.getDate() + col * 7 + row);
+              if (d > endDate) return <div key={`sp-${col}-${row}`} className="hm-cell hm-cell--spacer" />;
+              const iso   = toDateStr(d);
+              const count = dataMap[iso]?.sessionCount ?? 0;
+              const isToday = iso === todayStr;
+              return (
+                <div
+                  key={iso}
+                  className={`hm-cell ${getColorClass(count)}${isToday ? ' hm-cell--today' : ''}`}
+                  onMouseEnter={() => handleMouseEnter(iso)}
+                  onMouseLeave={handleMouseLeave}
+                  aria-label={`${iso}: ${count} session${count !== 1 ? 's' : ''}`}
+                />
+              );
+            }),
+          ])}
         </div>
 
+        {/* Tooltip side panel */}
         <div style={{
           width: 160,
           flexShrink: 0,
