@@ -35,7 +35,6 @@ const AvatarEditor = ({ file, onApply, onCancel }: Props) => {
     const y = (CANVAS_SIZE - h) / 2 + offset.y;
     ctx.drawImage(img, x, y, w, h);
 
-    //Dark overlay with circular cutout
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
@@ -43,7 +42,6 @@ const AvatarEditor = ({ file, onApply, onCancel }: Props) => {
     ctx.arc(CANVAS_SIZE / 2, CANVAS_SIZE / 2, CIRCLE_RADIUS, 0, Math.PI * 2, true);
     ctx.fill('evenodd');
 
-    //Circle border
     ctx.beginPath();
     ctx.arc(CANVAS_SIZE / 2, CANVAS_SIZE / 2, CIRCLE_RADIUS, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255,255,255,0.8)';
@@ -67,7 +65,6 @@ const AvatarEditor = ({ file, onApply, onCancel }: Props) => {
     draw();
   }, [draw]);
 
-  //Clamps offset so the circle never exits the image bounds
   const clampOffset = useCallback((x: number, y: number) => {
     const img = imgRef.current;
     if (!img) return { x, y };
@@ -80,7 +77,6 @@ const AvatarEditor = ({ file, onApply, onCancel }: Props) => {
     };
   }, [zoom]);
 
-  //Re-clamp when zoom changes in case current offset is now out of bounds
   useEffect(() => {
     setOffset(prev => clampOffset(prev.x, prev.y));
   }, [zoom]);
@@ -108,7 +104,6 @@ const AvatarEditor = ({ file, onApply, onCancel }: Props) => {
     const ctx = offscreen.getContext('2d');
     if (!ctx) return;
 
-    //Clip to circle for the exported image
     ctx.beginPath();
     ctx.arc(OUTPUT_SIZE / 2, OUTPUT_SIZE / 2, OUTPUT_SIZE / 2, 0, Math.PI * 2);
     ctx.clip();

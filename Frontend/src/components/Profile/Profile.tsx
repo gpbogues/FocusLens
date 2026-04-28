@@ -46,7 +46,7 @@ const Profile = () => {
   const selectedAvatar = AVATAR_PRESETS.find(a => a.id === avatarId) ?? AVATAR_PRESETS[0];
   const isCustomSelected = avatarId === CUSTOM_AVATAR_ID;
 
-  //Custom avatar state
+  //custom avatar state
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -108,7 +108,6 @@ const Profile = () => {
     setUploadError('');
 
     try {
-      //Request presigned URL from backend
       const res = await fetch(`${API_URL}/user/avatar/presigned-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,7 +117,6 @@ const Profile = () => {
       if (!res.ok) throw new Error('Failed to get upload URL');
       const { uploadUrl, publicUrl } = await res.json();
 
-      //Upload cropped blob directly to S3
       const s3Res = await fetch(uploadUrl, {
         method: 'PUT',
         body: blob,
@@ -127,7 +125,6 @@ const Profile = () => {
 
       if (!s3Res.ok) throw new Error('Upload to S3 failed');
 
-      //Save the public URL to the user's profile
       const saveRes = await fetch(`${API_URL}/user/avatar`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -146,7 +143,6 @@ const Profile = () => {
     }
   };
 
-  //Account section state
   const [revealEmail, setRevealEmail] = useState(false);
   const [modal, setModal] = useState<'username' | 'email' | 'email-verify' | 'password' | 'delete-account' | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);

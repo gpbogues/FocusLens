@@ -12,7 +12,6 @@ interface Session {
   activeDuration?: number;
 }
 
-//Calculates total session time from start and end strings
 const calcTotalDuration = (start: string, end: string | null | undefined, activeDuration?: number): string => {
   if (!end) return 'In progress';
 
@@ -28,7 +27,6 @@ const calcTotalDuration = (start: string, end: string | null | undefined, active
       const [hours, minutes, seconds] = timePart.split('.')[0].split(':').map(Number);
       return new Date(year, month - 1, day, hours, minutes, seconds).getTime() / 1000;
     };
-    //diff is just total time but in seconds, needed to get hours and minutes
     totalSecs = Math.floor(toSeconds(end) - toSeconds(start));
   }
 
@@ -40,10 +38,8 @@ const calcTotalDuration = (start: string, end: string | null | undefined, active
   return `${seconds}s`;
 };
 
-//Formats datetime (how its stored within mysql) into separate date and time display values
 const formatDateTime = (dateStr: string | null | undefined) => {
   if (!dateStr) return { date: '—', time: '—' };
-  // SQLite returns 'YYYY-MM-DD HH:MM:SS' (space), normalize to 'T' for consistent splitting
   const normalized = dateStr.replace(' ', 'T');
   const [datePart, timePart] = normalized.split('T');
   if (!timePart) return { date: datePart, time: '—' };
@@ -91,7 +87,6 @@ const Home = () => {
     clearOpenSnapshot();
   }, [openSnapshot, clearOpenSnapshot]);
 
-  //Fetches most recent sessions when user is logged in
   useEffect(() => {
     if (!user) return;
     console.log('Home: fetching sessions, sessionTrigger:', sessionTrigger);
@@ -123,7 +118,6 @@ const Home = () => {
       clearTimeout(holdTimer);
       clearTimeout(flipTimer);
     };
-  //eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {

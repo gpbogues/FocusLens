@@ -8,14 +8,8 @@ import {
   cognitoResendCode,
 } from "./cognitoAuth";
 
-//NOTE: 
-//this got reverted to the state prior to logout button implementation,
-//as login/register sidebar buttons are removed with login form being independent and presented at the start 
-
-//Form stages, used to determine which form to show and which API calls to make on submit
 type Stage = "login" | "register" | "verify" | "forgot-email" | "forgot-verify" | "forgot-password";
 
-//Components of overall login functionality
 function Login() {
   const [stage, setStage] = useState<Stage>("login");  //Form type shown, default is login
 
@@ -32,7 +26,6 @@ function Login() {
   const { login } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;                     //Base URL for backend API calls (EC2 instance)
 
-  //Password requirement checks
   const passwordRequirements = [
     { label: "Password must be at least 8 characters", met: password.length >= 8 },
     { label: "Use a number", met: /\d/.test(password) },
@@ -42,7 +35,6 @@ function Login() {
   ];
   const allRequirementsMet = passwordRequirements.every((r) => r.met);
 
-  //Resend verification code (registration flow)
   const handleResendCode = async () => {
     try {
       await cognitoResendCode(email);
@@ -53,7 +45,6 @@ function Login() {
     }
   };
 
-  //Resend verification code (forgot password flow)
   const handleForgotResendCode = async () => {
     try {
       await cognitoResendCode(email);
@@ -64,13 +55,11 @@ function Login() {
     }
   };
 
-  //One big handleSumbit, handles all stages of form
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      //Forgot password, step 1: check email exists, send verification code via Cognito temp user
       if (stage === "forgot-email") {
         const checkRes = await fetch(`${API_URL}/check-email?email=${encodeURIComponent(email)}`);
         const checkData = await checkRes.json();
@@ -78,14 +67,12 @@ function Login() {
           alert("No account found with that email.");
           return;
         }
-        //Temp password for Cognito sign-up (only used to generate the verification email)
         const tempPassword = "Tmp!" + Array.from(crypto.getRandomValues(new Uint8Array(12)))
           .map((b) => b.toString(36)).join("").slice(0, 12);
         try {
           await cognitoSignUp(email, tempPassword, email);
         } catch (cognitoErr: any) {
           if (cognitoErr.code === "UsernameExistsException" || cognitoErr.name === "UsernameExistsException") {
-            //Phantom user from a previous forgot-password attempt, resend code instead
             await cognitoResendCode(email);
           } else {
             throw cognitoErr;
@@ -95,7 +82,6 @@ function Login() {
         return;
       }
 
-      //Forgot password, step 2: confirm code, clean up Cognito temp user
       if (stage === "forgot-verify") {
         await cognitoConfirmSignUp(email, verifyCode);
         await fetch(`${API_URL}/delete-cognito-user`, {
@@ -108,7 +94,6 @@ function Login() {
         return;
       }
 
-      //Forgot password, step 3: set new password in RDS by email (no userId available)
       if (stage === "forgot-password") {
         if (!allRequirementsMet) {
           alert("Password requirements not met.");
@@ -136,13 +121,9 @@ function Login() {
         return;
       }
 
-      //Verify: confirm code, update user verified status in RDS,
-      //signals delete to cognito user when verification is good
       if (stage === "verify") {
-        //Confirm code with cognito
         await cognitoConfirmSignUp(email, verifyCode);
 
-        //Calls backend, marks user as verified in RDS AND deletes cognito's copy of user 
         const res = await fetch(`${API_URL}/verify-complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -162,21 +143,17 @@ function Login() {
         return;
       }
 
-      //Register: write to RDS, then cognito sends verification email
       if (stage === "register") {
-        //Check all password requirements before submitting
         if (!allRequirementsMet) {
           alert("Password requirements not met.");
           return;
         }
 
-        //Check passwords match
         if (password !== confirmPassword) {
           alert("Passwords do not match.");
           return;
         }
 
-        //Calls backend register API 
         const res = await fetch(`${API_URL}/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -189,22 +166,17 @@ function Login() {
           return;
         }
 
-        //Cognito side, if cognitoSignUp fails after rds insert succeeds,
-        //roll back the rds row so the email isn't locked until the 24h cleanup run,
-        //also handles UsernameExistsException from phantom users(from abandoned email updates)
         try {
           await cognitoSignUp(email, password, username);
         } catch (cognitoErr: any) {
           if (cognitoErr.code === "UsernameExistsException") {
-            //Phantom user from an abandoned email update, delete it and retry
             await fetch(`${API_URL}/delete-cognito-user`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email }),
             });
-            await cognitoSignUp(email, password, username); //retry once
+            await cognitoSignUp(email, password, username);
           } else {
-            //Any other cognito failure, roll back the rds insert
             await fetch(`${API_URL}/register-rollback`, {
               method: "DELETE",
               headers: { "Content-Type": "application/json" },
@@ -219,8 +191,6 @@ function Login() {
         return;
       }
 
-      //Login: RDS only, blocks unverified users
-      //Calls backend login API
       const res = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -229,20 +199,16 @@ function Login() {
       });
       const data = await res.json();
 
-      //This sections works with AuthContext to store user info globally
       if (data.success) {
-        //Login response already contains user + settings, set state directly, no extra round-trip
         sessionStorage.setItem('fromLogin', '1');
         login(data);
 
-        //Scale out the login box before navigating to home
         const el = document.querySelector('.login-box') as HTMLElement | null;
         if (el) {
           el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
           el.style.opacity = '0';
           el.style.transform = 'scale(0.92)';
         }
-        //Wait for animation to finish before navigating
         setTimeout(() => {
           navigate('/', { state: { fromLogin: true } });
         }, 400);
@@ -257,7 +223,6 @@ function Login() {
     }
   };
 
-  //TEXT BOXES, BUTTONS, DIVS, AND++ SECTION 
   return (
     <div className="login-container">
 
